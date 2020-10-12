@@ -1,7 +1,8 @@
+use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
+use rogue_rendering_vulkan_backend::devices::logical_device::{create_logical_device, QueueFamilyIndices};
 use rogue_rendering_vulkan_backend::util;
 use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
-use rogue_rendering_vulkan_backend::util::physical_device_selection::pick_physical_device;
 
 use ash::version::{EntryV1_0, InstanceV1_0};
 use ash::vk;
@@ -38,7 +39,7 @@ impl VulkanApp {
         // pick the first graphics card that supports all the features we specified in instance
         let required_queue_families: HashSet<_> = REQUIRED_QUEUES.iter().cloned().collect();
         let physical_device = pick_physical_device(&instance, &required_queue_families);
-        let logical_device = Self::create_logical_device(&instance);
+        let logical_device = create_logical_device(&instance, physical_device, &required_queue_families);
 
         Self {
             _entry : entry,
