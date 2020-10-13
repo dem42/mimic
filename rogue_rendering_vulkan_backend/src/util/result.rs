@@ -9,6 +9,7 @@ pub enum VulkanError {
     NoValidationLayers,
     VulkanStringConversionError,
     VkError(String),
+    LogicalDeviceCreateError,
 }
 
 impl fmt::Display for VulkanError {
@@ -17,6 +18,7 @@ impl fmt::Display for VulkanError {
             VulkanError::NoValidationLayers => write!(f, "No available layers"),
             VulkanError::VulkanStringConversionError => write!(f, "Failed to convert vulkan string to string"),
             VulkanError::VkError(msg) => write!(f, "Error from vk::Result: {}", msg),            
+            VulkanError::LogicalDeviceCreateError => write!(f, "Failed to crate logical device"),            
         }
     }
 }

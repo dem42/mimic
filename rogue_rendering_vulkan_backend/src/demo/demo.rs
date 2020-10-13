@@ -1,5 +1,5 @@
 use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
-use rogue_rendering_vulkan_backend::devices::logical_device::{create_logical_device, QueueFamilyIndices};
+use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
 use rogue_rendering_vulkan_backend::util;
 use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
