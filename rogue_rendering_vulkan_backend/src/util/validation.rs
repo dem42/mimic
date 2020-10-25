@@ -1,5 +1,8 @@
 use crate::util::result::{Result, VulkanError};
 use crate::util::tools::{vk_to_string};
+
+use rustylog::{log, Log};
+
 use ash::version::EntryV1_0;
 use std::convert::TryFrom;
 use std::os::raw::c_char;
@@ -60,9 +63,9 @@ impl VulkanValidation {
         if layer_properties.is_empty() {
             return Err(VulkanError::NoValidationLayers);
         } else if let ValidationOptions::Verbose = self.options {
-            println!("Available layers:");
+            log!(Log::Info, "Available layers:");
             for layer in &layer_properties {
-                println!("\t{}", vk_to_string(&layer.layer_name)?);
+                log!(Log::Info, "{}", vk_to_string(&layer.layer_name)?);
             }
         }
 

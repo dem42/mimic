@@ -1,34 +1,22 @@
 use crate::util::result::{Result, VulkanError};
+use crate::util::validation::VulkanValidation;
+use crate::devices::queues::{QueueFamilyCreateData, QueueFamilyIndices};
+use crate::devices::requirements::DeviceRequirements;
 
 use ash::version::InstanceV1_0;
 use ash::vk;
-use std::collections::HashSet;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 
-struct QueueFamilyIndices {
-    indices: HashMap<vk::QueueFlags, Vec<u32>>,
-}
-
-struct QueueFamilyCreateData(u32, u32, Vec<f32>);
-
-impl QueueFamilyIndices {
-    fn get_queue_family_data(family_indices: &Vec<u32>) -> Result<QueueFamilyCreateData> {
-        if family_indices.is_empty() {
-            return Err(VulkanError::LogicalDeviceCreateError);
-        }
-
-        Ok(QueueFamilyCreateData(family_indices[0], 1, vec![1.0_f32]))
-    }
-}
-
-pub fn create_logical_device(instance: &ash::Instance, physical_device: vk::PhysicalDevice, required_queue_families: &HashSet<vk::QueueFlags>) -> ash::Device {
-    
-    let queue_indices = find_queue_families(instance, physical_device, required_queue_families);
-
+pub fn create_logical_device(
+    instance: &ash::Instance, 
+    physical_device: vk::PhysicalDevice,
+    queue_indices: &QueueFamilyIndices,
+    requirements: &DeviceRequirements,
+    validation: &VulkanValidation) -> Result<ash::Device> 
+{
     let mut queue_create_infos = Vec::new();
-    for (_, queue_family_indices) in queue_indices.indices.iter() {
-        let QueueFamilyCreateData(queue_family_index, queue_count, queue_priorities) = QueueFamilyIndices::get_queue_family_data(queue_family_indices).expect("Failed to get queue family from indices");
+    for (&queue_family_index, _) in &queue_indices.indices {              
+        let QueueFamilyCreateData(queue_family_index, queue_count, queue_priorities) = QueueFamilyIndices::get_best_queue_family_data(queue_family_index);
         let queue_create_info = vk::DeviceQueueCreateInfo {
             s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
             queue_family_index: queue_family_index,
@@ -43,35 +31,23 @@ pub fn create_logical_device(instance: &ash::Instance, physical_device: vk::Phys
         ..vk::PhysicalDeviceFeatures::default()
     };
 
+    let enabled_extensions = requirements.get_enabled_extension_names();
+    let enabled_extension_cstrs = DeviceRequirements::convert_enabled_extension_names(&enabled_extensions);
+
     let device_create_info = vk::DeviceCreateInfo {
-        queue_create_info_count: u32::try_from(queue_create_infos.len()).expect("Failed to convert usize to u32"),
+        queue_create_info_count: match u32::try_from(queue_create_infos.len()) { Ok(count) => count, Err(_) => return Err(VulkanError::LogicalDeviceCreateError)},
         p_queue_create_infos: queue_create_infos.as_ptr(),
         p_enabled_features: &device_features as *const vk::PhysicalDeviceFeatures,
+        enabled_layer_count: validation.get_enabled_layer_count(),
+        pp_enabled_layer_names: validation.get_enabled_layer_names(),
+        enabled_extension_count: requirements.get_enabled_extension_count(),
+        pp_enabled_extension_names: enabled_extension_cstrs.as_ptr(),
         ..vk::DeviceCreateInfo::default()
     };
 
-    unimplemented!()
-}
-
-fn find_queue_families(instance: &ash::Instance, physical_device: vk::PhysicalDevice, required_queue_families: &HashSet<vk::QueueFlags>) -> QueueFamilyIndices {
-    let device_queue_families = unsafe { 
-        instance.get_physical_device_queue_family_properties(physical_device) 
+    let logical_device = unsafe {
+        instance.create_device(physical_device, &device_create_info, None)?
     };
 
-    let mut indices: HashMap<vk::QueueFlags, Vec<u32>> = HashMap::new();
-    let mut queue_family_index = 0u32;
-    for queue_family in device_queue_families {
-        if queue_family.queue_count > 0 {
-            for &required_family_flag in required_queue_families.iter() {
-                if queue_family.queue_flags.contains(required_family_flag) {
-                    let entry = indices.entry(required_family_flag).or_default();
-                    entry.push(queue_family_index);
-                }
-            }
-        }
-        queue_family_index += 1;
-    }
-    QueueFamilyIndices {
-        indices,
-    }
+    Ok(logical_device)
 }

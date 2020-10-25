@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "rustyrogue",
+    "rustylog",
     "rogue_rendering_vulkan_backend",
 ]

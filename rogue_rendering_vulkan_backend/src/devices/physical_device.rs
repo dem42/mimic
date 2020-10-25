@@ -1,4 +1,10 @@
+use crate::devices::queues::{has_present_function, QueueType};
+use crate::devices::requirements::DeviceRequirements;
+use crate::util::platform::SurfaceContainer;
 use crate::util::tools;
+use crate::util::result::{Result, VulkanError};
+
+use rustylog::{log, Log};
 
 use ash::version::InstanceV1_0;
 use ash::vk;
@@ -27,18 +33,18 @@ impl PartialOrd for RatedPhyiscalDevice {
 }
 
 // the device is implicitly destroyed when instance is destroyed
-pub fn pick_physical_device(instance: &ash::Instance, required_queue_families: &HashSet<vk::QueueFlags>) -> vk::PhysicalDevice {
+pub fn pick_physical_device(instance: &ash::Instance, surface_container: &SurfaceContainer, requirements: &DeviceRequirements) -> Result<vk::PhysicalDevice> {
     let physical_devices = unsafe {
-        instance.enumerate_physical_devices().expect("Failed to get phyiscal devices")
+        instance.enumerate_physical_devices()?
     };
     if physical_devices.is_empty() {
-        panic!("No GPUs with Vulkan support found");
+        return Err(VulkanError::PhysicalDeviceNoGPU);
     }
 
     let mut suitable_physical_devices = BinaryHeap::new();
 
     for &physical_device in physical_devices.iter() {
-        let (rating, description) = rate_physical_device(instance, physical_device, required_queue_families);
+        let (rating, description) = rate_physical_device(instance, physical_device, surface_container, requirements)?;
         if rating > 0 {
             suitable_physical_devices.push(RatedPhyiscalDevice {
                 rating,
@@ -49,15 +55,20 @@ pub fn pick_physical_device(instance: &ash::Instance, required_queue_families: &
     }
 
     if let Some(best_suitable_phyiscal_device) = suitable_physical_devices.pop() {
-        println!("Best physical device: {}", best_suitable_phyiscal_device.description);
-        best_suitable_phyiscal_device.physical_device
+        log!(Log::Info, "Best physical device: rating={}\n{}", best_suitable_phyiscal_device.rating, best_suitable_phyiscal_device.description);
+        Ok(best_suitable_phyiscal_device.physical_device)
     } else {
-        panic!("Failed to find a suitable GPU!");
+        Err(VulkanError::PhysicalDeviceNoGPU)
     }    
 }
 
 // device is a handle and implements copy
-fn rate_physical_device(instance: &ash::Instance, physical_device: vk::PhysicalDevice, required_queue_families: &HashSet<vk::QueueFlags>) -> (u32, String) {
+fn rate_physical_device(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    surface_container: &SurfaceContainer,
+    requirements: &DeviceRequirements) -> Result<(u32, String)> 
+{
     let physical_device_properties = unsafe {
         instance.get_physical_device_properties(physical_device)
     };
@@ -89,39 +100,54 @@ fn rate_physical_device(instance: &ash::Instance, physical_device: vk::PhysicalD
     let patch_version = version_patch(physical_device_properties.api_version);
     description.push_str(&format!("Version: {}.{}.{}\n", major_version, minor_version, patch_version));
 
+    // if we don't match required device extensions then return 0 as rating
+    if check_device_extensions(instance, physical_device, requirements, &mut description)? == false {
+        return Ok((0, description))
+    }
+
     // if we have any special requirements as to what needs to be supported we should put it here
     let mut found_queue_families = HashSet::new();
+    let mut queue_family_idx = 0u32;
     for queue_family in device_queue_families.iter() {
         description.push_str(&format!("Queue Count: {:2} ", queue_family.queue_count));
         if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
             description.push_str("| Graphics Queue: supported ");
-            found_queue_families.insert(vk::QueueFlags::GRAPHICS);
+            found_queue_families.insert(QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS));
         } else {
             description.push_str("| Graphics Queue: unsupported ");
         };
         if queue_family.queue_flags.contains(vk::QueueFlags::COMPUTE) {
             description.push_str("| Compute Queue: supported ");
-            found_queue_families.insert(vk::QueueFlags::COMPUTE);
+            found_queue_families.insert(QueueType::QueueWithFlag(vk::QueueFlags::COMPUTE));
         } else {
             description.push_str("| Compute Queue: unsupported ");
         };
         if queue_family.queue_flags.contains(vk::QueueFlags::TRANSFER) {
             description.push_str("| Transfer Queue: supported ");
-            found_queue_families.insert(vk::QueueFlags::TRANSFER);
+            found_queue_families.insert(QueueType::QueueWithFlag(vk::QueueFlags::TRANSFER));
         } else {
             description.push_str("| Transfer Queue: unsupported ");
         };
         if queue_family.queue_flags.contains(vk::QueueFlags::SPARSE_BINDING) {
             description.push_str("| Sparse binding Queue: supported ");
-            found_queue_families.insert(vk::QueueFlags::SPARSE_BINDING);
+            found_queue_families.insert(QueueType::QueueWithFlag(vk::QueueFlags::SPARSE_BINDING));
         } else {
             description.push_str("| Sparse binding Queue: unsupported ");
         };
+
+        if has_present_function(surface_container, physical_device, queue_family_idx)? {
+            description.push_str("| Present: supported ");
+            found_queue_families.insert(QueueType::PresentQueue);
+        } else {
+            description.push_str("| Present: unsupported ");
+        }
+
         description.push_str("\n");
+        queue_family_idx += 1;
     }
     
-    if !required_queue_families.is_subset(&found_queue_families) {
-        return (0, description);
+    if !requirements.required_queues.is_subset(&found_queue_families) {
+        return Ok((0, description));
     } else {
         rating += 100 * u32::try_from(found_queue_families.len()).expect("Failed to convert usize to u32");
     }
@@ -133,5 +159,35 @@ fn rate_physical_device(instance: &ash::Instance, physical_device: vk::PhysicalD
         description.push_str("Geometry Shader unsupported\n");
     };
 
-    (rating, description)
+    Ok((rating, description))
+}
+
+fn check_device_extensions(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    requirements: &DeviceRequirements,
+    description: &mut String) -> Result<bool> 
+{
+    let available_extensions = unsafe {
+        instance.enumerate_device_extension_properties(physical_device)?
+    };
+
+    let mut available_extension_names = vec![];
+
+    let mut required_extensions_found = 0;
+    description.push_str("\tAvailable Device Extensions:\n");
+    for extension in available_extensions.iter() {
+        let extension_name = tools::vk_to_string(&extension.extension_name)?;
+        description.push_str(&format!(
+            "\t\tName: {}, Version: {}\n",
+            extension_name, extension.spec_version
+        ));
+        if requirements.required_device_extensions.contains(&&extension_name[..]) {
+            required_extensions_found += 1;
+        }
+        available_extension_names.push(extension_name);
+    }
+
+    let all_required_extensions_found = requirements.required_device_extensions.len() == required_extensions_found;
+    Ok(all_required_extensions_found)
 }

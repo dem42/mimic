@@ -1,5 +1,7 @@
 use crate::util::validation::VulkanValidation;
 
+use rustylog::{log, Log};
+
 use ash::vk;
 use std::ffi::CStr;
 use std::ptr;
@@ -26,7 +28,7 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
         _ => "[Unknown]",
     };
     let message = CStr::from_ptr((*p_callback_data).p_message);
-    println!("[Debug]{}{}{:?}", severity, types, message);
+    log!(Log::Error, "[Debug]{}{}{:?}", severity, types, message);
 
     vk::FALSE
 }

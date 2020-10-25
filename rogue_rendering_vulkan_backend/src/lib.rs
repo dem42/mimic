@@ -1,4 +1,7 @@
+extern crate rustylog;
+
 pub mod devices;
+pub mod presentation;
 pub mod util;
 
 #[cfg(test)]

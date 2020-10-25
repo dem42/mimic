@@ -1,12 +1,20 @@
 use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
+use rogue_rendering_vulkan_backend::devices::queues::{create_queues, QueueFamilyIndices, QueueType};
+use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
+use rogue_rendering_vulkan_backend::presentation::swap_chain::SwapChainSupportDetails;
 use rogue_rendering_vulkan_backend::util;
-use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
+use rogue_rendering_vulkan_backend::util::platform::SurfaceContainer;
+use rogue_rendering_vulkan_backend::util::result::{Result, VulkanError};
+use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 
-use ash::version::{EntryV1_0, InstanceV1_0};
+use rustylog::log;
+use rustylog::Log;
+
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::ptr;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -17,44 +25,67 @@ const WINDOW_TITLE: &'static str = "Vulkan Demo";
 const ENGINE_NAME: &'static str = "Vulkan Engine";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
-const REQUIRED_QUEUES: [vk::QueueFlags; 1] = [vk::QueueFlags::GRAPHICS];
+const REQUIRED_QUEUES: [QueueType; 2] = [QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS), QueueType::PresentQueue];
+const DEVICE_EXTENSIONS: [&'static str; 1] = ["VK_KHR_swapchain"];
+
+fn is_swap_chain_adequate(swap_chain_details: &SwapChainSupportDetails) -> bool {
+    true
+}
 
 struct VulkanApp {
     _entry: ash::Entry,
     instance: ash::Instance,
     _validation: VulkanValidation,
     debug: VulkanDebug,
-    physical_device: vk::PhysicalDevice,
+    surface_container: SurfaceContainer,
+    _physical_device: vk::PhysicalDevice,
     logical_device: ash::Device,
+    queues: HashMap<QueueType, ash::vk::Queue>,
 }
 
 impl VulkanApp {
 
-    fn new() -> Self {
+    fn new(window: &Window) -> Self {
         let entry = ash::Entry::new().unwrap();
         let validation = VulkanValidation::enabled(util::validation::ValidationOptions::Verbose);
         // creating the instance is equivalent to initializing the vulkan library
-        let instance = Self::create_instance(&entry, &validation);
+        let instance = Self::create_instance(&entry, &validation).expect("Failed to create instance");
         let debug = VulkanDebug::new(&entry, &instance, &validation);
+        // creating a surface to present images to
+        let surface_container = util::platform::create_surface(&entry, &instance, &window).expect("Failed to create surface");
         // pick the first graphics card that supports all the features we specified in instance
-        let required_queue_families: HashSet<_> = REQUIRED_QUEUES.iter().cloned().collect();
-        let physical_device = pick_physical_device(&instance, &required_queue_families);
-        let logical_device = create_logical_device(&instance, physical_device, &required_queue_families);
+        let requirements = DeviceRequirements::new(&REQUIRED_QUEUES, &DEVICE_EXTENSIONS, is_swap_chain_adequate);
+        let physical_device = pick_physical_device(&instance, &surface_container, &requirements).expect("Failed to create physical device");
+        // create logical device and queues
+        let queue_indices = QueueFamilyIndices::find(&instance, physical_device, &surface_container, &requirements).expect("Failed to create queue indices");
+        let logical_device = create_logical_device(&instance, physical_device, &queue_indices, &requirements, &validation).expect("Failed to create logical device");
+        let queues = create_queues(&queue_indices, &logical_device).expect("Failed to get queues");
 
-        Self {
+        let result = Self {
             _entry : entry,
             instance,
             _validation: validation,
             debug,
-            physical_device,
+            surface_container,
+            _physical_device: physical_device,
             logical_device,
-        }
+            queues,
+        };
+
+        result
     }
 
-    fn create_instance(entry: &ash::Entry, validation: &VulkanValidation) -> ash::Instance {
-        match validation.check_validation_layer_support(entry) {
-            Ok(result) => if !result { eprintln!("Vulkan layer validation failed!"); },
-            Err(error) => eprintln!("Vulkan layer validation failed with error: {:?}!", error),
+    fn get_graphics_queue(&self) -> &ash::vk::Queue {
+        self.queues.get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS)).expect("Failed to get graphics queue")
+    }
+
+    fn get_present_queue(&self) -> &ash::vk::Queue {
+        self.queues.get(&QueueType::PresentQueue).expect("Failed to get present queue")
+    }
+
+    fn create_instance(entry: &ash::Entry, validation: &VulkanValidation) -> Result<ash::Instance> {
+        if validation.check_validation_layer_support(entry)? == false {
+            return Err(VulkanError::RequiredValidationLayersUnsupported);
         }
 
         let app_name = CString::new(WINDOW_TITLE).unwrap();
@@ -88,10 +119,8 @@ impl VulkanApp {
                 .expect("Failed to create instance!")
         };
 
-        instance
+        Ok(instance)
     }
-
-    
 
     fn init_window(event_loop: &EventLoop<()>) -> Window {
         winit::window::WindowBuilder::new()
@@ -104,8 +133,10 @@ impl VulkanApp {
 
 impl Drop for VulkanApp {
     fn drop(&mut self) { 
-        println!("VulkanApp exiting");
+        log!(Log::Info, "VulkanApp exiting");
         unsafe {
+            self.logical_device.destroy_device(None);
+            self.surface_container.surface_loader.destroy_surface(self.surface_container.surface, None);
             self.debug.destroy_debug_messenger();
             self.instance.destroy_instance(None);
         }
@@ -155,10 +186,14 @@ impl Main {
 }
 
 fn main() {
-    println!("Hello demo");
+    log!(Log::Info, "Hello demo");
     let event_loop = EventLoop::new();
     let window = VulkanApp::init_window(&event_loop);
 
-    let vulkan_app = VulkanApp::new();
+    let vulkan_app = VulkanApp::new(&window);
+
+    vulkan_app.get_graphics_queue();
+    vulkan_app.get_present_queue();
+
     Main::main_loop(vulkan_app, event_loop, window);
 }
