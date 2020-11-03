@@ -1,15 +1,16 @@
 use crate::devices::queues::{has_present_function, QueueType};
 use crate::devices::requirements::DeviceRequirements;
+use crate::presentation::swap_chain::SwapChainSupportDetails;
 use crate::util::platform::SurfaceContainer;
-use crate::util::tools;
 use crate::util::result::{Result, VulkanError};
+use crate::util::tools;
 
 use rustylog::{log, Log};
 
 use ash::version::InstanceV1_0;
 use ash::vk;
 use ash::vk::{version_major, version_minor, version_patch};
-use std::cmp::{Eq, PartialEq, PartialOrd, Ord, Ordering};
+use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::{BinaryHeap, HashSet};
 use std::convert::TryFrom;
 
@@ -22,21 +23,23 @@ struct RatedPhyiscalDevice {
 
 impl Ord for RatedPhyiscalDevice {
     fn cmp(&self, other: &RatedPhyiscalDevice) -> Ordering {
-         self.rating.cmp(&other.rating)
+        self.rating.cmp(&other.rating)
     }
 }
 
 impl PartialOrd for RatedPhyiscalDevice {
     fn partial_cmp(&self, other: &RatedPhyiscalDevice) -> Option<Ordering> {
-         Some(self.cmp(other))
+        Some(self.cmp(other))
     }
 }
 
 // the device is implicitly destroyed when instance is destroyed
-pub fn pick_physical_device(instance: &ash::Instance, surface_container: &SurfaceContainer, requirements: &DeviceRequirements) -> Result<vk::PhysicalDevice> {
-    let physical_devices = unsafe {
-        instance.enumerate_physical_devices()?
-    };
+pub fn pick_physical_device(
+    instance: &ash::Instance,
+    surface_container: &SurfaceContainer,
+    requirements: &DeviceRequirements,
+) -> Result<vk::PhysicalDevice> {
+    let physical_devices = unsafe { instance.enumerate_physical_devices()? };
     if physical_devices.is_empty() {
         return Err(VulkanError::PhysicalDeviceNoGPU);
     }
@@ -44,7 +47,8 @@ pub fn pick_physical_device(instance: &ash::Instance, surface_container: &Surfac
     let mut suitable_physical_devices = BinaryHeap::new();
 
     for &physical_device in physical_devices.iter() {
-        let (rating, description) = rate_physical_device(instance, physical_device, surface_container, requirements)?;
+        let (rating, description) =
+            rate_physical_device(instance, physical_device, surface_container, requirements)?;
         if rating > 0 {
             suitable_physical_devices.push(RatedPhyiscalDevice {
                 rating,
@@ -55,11 +59,16 @@ pub fn pick_physical_device(instance: &ash::Instance, surface_container: &Surfac
     }
 
     if let Some(best_suitable_phyiscal_device) = suitable_physical_devices.pop() {
-        log!(Log::Info, "Best physical device: rating={}\n{}", best_suitable_phyiscal_device.rating, best_suitable_phyiscal_device.description);
+        log!(
+            Log::Info,
+            "Best physical device: rating={}\n{}",
+            best_suitable_phyiscal_device.rating,
+            best_suitable_phyiscal_device.description
+        );
         Ok(best_suitable_phyiscal_device.physical_device)
     } else {
         Err(VulkanError::PhysicalDeviceNoGPU)
-    }    
+    }
 }
 
 // device is a handle and implements copy
@@ -67,27 +76,39 @@ fn rate_physical_device(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
     surface_container: &SurfaceContainer,
-    requirements: &DeviceRequirements) -> Result<(u32, String)> 
-{
-    let physical_device_properties = unsafe {
-        instance.get_physical_device_properties(physical_device)
-    };
-    let physical_device_features = unsafe {
-        instance.get_physical_device_features(physical_device)
-    };
-    let device_queue_families = unsafe { 
-        instance.get_physical_device_queue_family_properties(physical_device) 
-    };
+    requirements: &DeviceRequirements,
+) -> Result<(u32, String)> {
+    let physical_device_properties =
+        unsafe { instance.get_physical_device_properties(physical_device) };
+    let physical_device_features =
+        unsafe { instance.get_physical_device_features(physical_device) };
+    let device_queue_families =
+        unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
 
     let mut rating = 0;
     let mut description = String::new();
     description.push_str("Type: ");
     match physical_device_properties.device_type {
-        vk::PhysicalDeviceType::CPU => {description.push_str("Cpu\n"); rating += 0;},
-        vk::PhysicalDeviceType::INTEGRATED_GPU => {description.push_str("Integrated GPU\n"); rating += 10;},
-        vk::PhysicalDeviceType::DISCRETE_GPU => {description.push_str("Discrete GPU\n"); rating += 1000;},
-        vk::PhysicalDeviceType::VIRTUAL_GPU => {description.push_str("Virtual GPU\n"); rating += 1;},
-        _ => {description.push_str("Other\n"); rating += 0},
+        vk::PhysicalDeviceType::CPU => {
+            description.push_str("Cpu\n");
+            rating += 0;
+        }
+        vk::PhysicalDeviceType::INTEGRATED_GPU => {
+            description.push_str("Integrated GPU\n");
+            rating += 10;
+        }
+        vk::PhysicalDeviceType::DISCRETE_GPU => {
+            description.push_str("Discrete GPU\n");
+            rating += 1000;
+        }
+        vk::PhysicalDeviceType::VIRTUAL_GPU => {
+            description.push_str("Virtual GPU\n");
+            rating += 1;
+        }
+        _ => {
+            description.push_str("Other\n");
+            rating += 0
+        }
     };
 
     let device_name = tools::vk_to_string(&physical_device_properties.device_name);
@@ -98,11 +119,15 @@ fn rate_physical_device(
     let major_version = version_major(physical_device_properties.api_version);
     let minor_version = version_minor(physical_device_properties.api_version);
     let patch_version = version_patch(physical_device_properties.api_version);
-    description.push_str(&format!("Version: {}.{}.{}\n", major_version, minor_version, patch_version));
+    description.push_str(&format!(
+        "Version: {}.{}.{}\n",
+        major_version, minor_version, patch_version
+    ));
 
     // if we don't match required device extensions then return 0 as rating
-    if check_device_extensions(instance, physical_device, requirements, &mut description)? == false {
-        return Ok((0, description))
+    if check_device_extensions(instance, physical_device, requirements, &mut description)? == false
+    {
+        return Ok((0, description));
     }
 
     // if we have any special requirements as to what needs to be supported we should put it here
@@ -128,7 +153,10 @@ fn rate_physical_device(
         } else {
             description.push_str("| Transfer Queue: unsupported ");
         };
-        if queue_family.queue_flags.contains(vk::QueueFlags::SPARSE_BINDING) {
+        if queue_family
+            .queue_flags
+            .contains(vk::QueueFlags::SPARSE_BINDING)
+        {
             description.push_str("| Sparse binding Queue: supported ");
             found_queue_families.insert(QueueType::QueueWithFlag(vk::QueueFlags::SPARSE_BINDING));
         } else {
@@ -145,11 +173,15 @@ fn rate_physical_device(
         description.push_str("\n");
         queue_family_idx += 1;
     }
-    
-    if !requirements.required_queues.is_subset(&found_queue_families) {
+
+    if !requirements
+        .required_queues
+        .is_subset(&found_queue_families)
+    {
         return Ok((0, description));
     } else {
-        rating += 100 * u32::try_from(found_queue_families.len()).expect("Failed to convert usize to u32");
+        rating += 100
+            * u32::try_from(found_queue_families.len()).expect("Failed to convert usize to u32");
     }
 
     if physical_device_features.geometry_shader == 1 {
@@ -159,6 +191,13 @@ fn rate_physical_device(
         description.push_str("Geometry Shader unsupported\n");
     };
 
+    let swap_query_support_details =
+        SwapChainSupportDetails::query_support(physical_device, &surface_container)?;
+    if (requirements.is_swap_chain_adequate_check)(&swap_query_support_details) == false {
+        description.push_str("Swap chain doesn't pass adequate check");
+        return Ok((0, description));
+    }
+
     Ok((rating, description))
 }
 
@@ -166,11 +205,10 @@ fn check_device_extensions(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
     requirements: &DeviceRequirements,
-    description: &mut String) -> Result<bool> 
-{
-    let available_extensions = unsafe {
-        instance.enumerate_device_extension_properties(physical_device)?
-    };
+    description: &mut String,
+) -> Result<bool> {
+    let available_extensions =
+        unsafe { instance.enumerate_device_extension_properties(physical_device)? };
 
     let mut available_extension_names = vec![];
 
@@ -182,12 +220,16 @@ fn check_device_extensions(
             "\t\tName: {}, Version: {}\n",
             extension_name, extension.spec_version
         ));
-        if requirements.required_device_extensions.contains(&&extension_name[..]) {
+        if requirements
+            .required_device_extensions
+            .contains(&&extension_name[..])
+        {
             required_extensions_found += 1;
         }
         available_extension_names.push(extension_name);
     }
 
-    let all_required_extensions_found = requirements.required_device_extensions.len() == required_extensions_found;
+    let all_required_extensions_found =
+        requirements.required_device_extensions.len() == required_extensions_found;
     Ok(all_required_extensions_found)
 }

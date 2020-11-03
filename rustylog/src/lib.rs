@@ -1,7 +1,12 @@
-pub mod logger;
 pub mod levels;
+pub mod logger;
 
-#[cfg(any(feature = "logerror", feature = "logwarn", feature = "loginfo", feature = "logdebug"))]
+#[cfg(any(
+    feature = "logerror",
+    feature = "logwarn",
+    feature = "loginfo",
+    feature = "logdebug"
+))]
 pub extern crate chrono;
 
 pub use crate::levels::Log;

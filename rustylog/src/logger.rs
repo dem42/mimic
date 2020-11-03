@@ -13,17 +13,17 @@ macro_rules! log {
         match $level {
             Log::Debug => {
                 let date = rustylog::chrono::Local::now();
-                print!("DEBUG [{}] {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*); 
+                print!("DEBUG [{}] {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
-            Log::Info => { 
+            Log::Info => {
                 let date = rustylog::chrono::Local::now();
                 print!("INFO [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
-            Log::Warn => { 
+            Log::Warn => {
                 let date = rustylog::chrono::Local::now();
                 print!("WARN [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
-            Log::Error => { 
+            Log::Error => {
                 let date = rustylog::chrono::Local::now();
                 print!("ERROR [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
@@ -37,16 +37,16 @@ macro_rules! log {
     ($level:expr, $($arg:tt)*) => {
         let line = line!();
         let file = file!();
-        match $level {            
-            Log::Info => { 
+        match $level {
+            Log::Info => {
                 let date = rustylog::chrono::Local::now();
                 print!("INFO [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
-            Log::Warn => { 
+            Log::Warn => {
                 let date = rustylog::chrono::Local::now();
                 print!("WARN [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
-            Log::Error => { 
+            Log::Error => {
                 let date = rustylog::chrono::Local::now();
                 print!("ERROR [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
@@ -62,11 +62,11 @@ macro_rules! log {
         let line = line!();
         let file = file!();
         match $level {
-            Log::Warn => { 
+            Log::Warn => {
                 let date = rustylog::chrono::Local::now();
                 print!("WARN [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
-            Log::Error => { 
+            Log::Error => {
                 let date = rustylog::chrono::Local::now();
                 print!("ERROR [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
@@ -82,7 +82,7 @@ macro_rules! log {
         let line = line!();
         let file = file!();
         match $level {
-            Log::Error => { 
+            Log::Error => {
                 let date = rustylog::chrono::Local::now();
                 print!("ERROR [{}]: {}:{}: ", date.format("%Y-%m-%d %H:%M:%S"), file, line); println!($($arg)*);
             },
@@ -94,5 +94,5 @@ macro_rules! log {
 #[cfg(not(debug_assertions))]
 #[macro_export]
 macro_rules! log {
-    ($($arg:tt)*) => {}
+    ($($arg:tt)*) => {};
 }

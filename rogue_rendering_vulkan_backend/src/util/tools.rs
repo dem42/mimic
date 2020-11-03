@@ -9,7 +9,5 @@ pub fn vk_to_string(raw_string_array: &[c_char]) -> Result<String> {
         CStr::from_ptr(pointer)
     };
 
-    Ok(raw_string
-        .to_str()?
-        .to_owned())
+    Ok(raw_string.to_str()?.to_owned())
 }

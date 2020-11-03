@@ -1,5 +1,5 @@
 use crate::util::result::{Result, VulkanError};
-use crate::util::tools::{vk_to_string};
+use crate::util::tools::vk_to_string;
 
 use rustylog::{log, Log};
 
@@ -20,7 +20,6 @@ pub struct VulkanValidation {
 }
 
 impl VulkanValidation {
-
     pub const fn enabled(options: ValidationOptions) -> Self {
         VulkanValidation {
             is_enabled: true,
@@ -47,7 +46,7 @@ impl VulkanValidation {
 
     pub fn get_enabled_layer_names(&self) -> *const *const c_char {
         if self.is_enabled {
-            self.validation_layer_names.as_ptr() as *const *const c_char            
+            self.validation_layer_names.as_ptr() as *const *const c_char
         } else {
             ptr::null()
         }
@@ -59,7 +58,7 @@ impl VulkanValidation {
         }
 
         let layer_properties = entry.enumerate_instance_layer_properties()?;
-        
+
         if layer_properties.is_empty() {
             return Err(VulkanError::NoValidationLayers);
         } else if let ValidationOptions::Verbose = self.options {
@@ -79,11 +78,10 @@ impl VulkanValidation {
                 }
             }
             if !layer_found {
-                return Ok(false)
+                return Ok(false);
             }
         }
 
         Ok(true)
     }
-
 }

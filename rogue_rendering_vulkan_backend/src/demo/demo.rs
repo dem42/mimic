@@ -1,16 +1,20 @@
-use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
-use rogue_rendering_vulkan_backend::devices::queues::{create_queues, QueueFamilyIndices, QueueType};
+use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
+use rogue_rendering_vulkan_backend::devices::queues::{
+    create_queues, QueueFamilyIndices, QueueType,
+};
 use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
-use rogue_rendering_vulkan_backend::presentation::swap_chain::SwapChainSupportDetails;
+use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
+use rogue_rendering_vulkan_backend::presentation::swap_chain::{
+    SwapChainContainer, SwapChainSupportDetails,
+};
 use rogue_rendering_vulkan_backend::util;
 use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
 use rogue_rendering_vulkan_backend::util::platform::SurfaceContainer;
 use rogue_rendering_vulkan_backend::util::result::{Result, VulkanError};
 use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 
-use rustylog::log;
-use rustylog::Log;
+use rustylog::{log, Log};
 
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
@@ -25,11 +29,14 @@ const WINDOW_TITLE: &'static str = "Vulkan Demo";
 const ENGINE_NAME: &'static str = "Vulkan Engine";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
-const REQUIRED_QUEUES: [QueueType; 2] = [QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS), QueueType::PresentQueue];
+const REQUIRED_QUEUES: [QueueType; 2] = [
+    QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS),
+    QueueType::PresentQueue,
+];
 const DEVICE_EXTENSIONS: [&'static str; 1] = ["VK_KHR_swapchain"];
 
 fn is_swap_chain_adequate(swap_chain_details: &SwapChainSupportDetails) -> bool {
-    true
+    !swap_chain_details.formats.is_empty() && !swap_chain_details.present_modes.is_empty()
 }
 
 struct VulkanApp {
@@ -41,28 +48,58 @@ struct VulkanApp {
     _physical_device: vk::PhysicalDevice,
     logical_device: ash::Device,
     queues: HashMap<QueueType, ash::vk::Queue>,
+    swap_chain_container: SwapChainContainer,
+    image_views_container: ImageViews,
 }
 
 impl VulkanApp {
-
     fn new(window: &Window) -> Self {
         let entry = ash::Entry::new().unwrap();
         let validation = VulkanValidation::enabled(util::validation::ValidationOptions::Verbose);
         // creating the instance is equivalent to initializing the vulkan library
-        let instance = Self::create_instance(&entry, &validation).expect("Failed to create instance");
+        let instance =
+            Self::create_instance(&entry, &validation).expect("Failed to create instance");
         let debug = VulkanDebug::new(&entry, &instance, &validation);
         // creating a surface to present images to
-        let surface_container = util::platform::create_surface(&entry, &instance, &window).expect("Failed to create surface");
+        let surface_container = util::platform::create_surface(&entry, &instance, &window)
+            .expect("Failed to create surface");
         // pick the first graphics card that supports all the features we specified in instance
-        let requirements = DeviceRequirements::new(&REQUIRED_QUEUES, &DEVICE_EXTENSIONS, is_swap_chain_adequate);
-        let physical_device = pick_physical_device(&instance, &surface_container, &requirements).expect("Failed to create physical device");
+        let requirements =
+            DeviceRequirements::new(&REQUIRED_QUEUES, &DEVICE_EXTENSIONS, is_swap_chain_adequate);
+        let physical_device = pick_physical_device(&instance, &surface_container, &requirements)
+            .expect("Failed to create physical device");
         // create logical device and queues
-        let queue_indices = QueueFamilyIndices::find(&instance, physical_device, &surface_container, &requirements).expect("Failed to create queue indices");
-        let logical_device = create_logical_device(&instance, physical_device, &queue_indices, &requirements, &validation).expect("Failed to create logical device");
+        let queue_indices = QueueFamilyIndices::find(
+            &instance,
+            physical_device,
+            &surface_container,
+            &requirements,
+        )
+        .expect("Failed to create queue indices");
+        let logical_device = create_logical_device(
+            &instance,
+            physical_device,
+            &queue_indices,
+            &requirements,
+            &validation,
+        )
+        .expect("Failed to create logical device");
         let queues = create_queues(&queue_indices, &logical_device).expect("Failed to get queues");
+        let swap_chain_container = SwapChainContainer::create(
+            &instance,
+            physical_device,
+            &logical_device,
+            &surface_container,
+            &window,
+            &queue_indices,
+        )
+        .expect("Failed to create swap chain");
+
+        let image_views_container = ImageViews::create(&logical_device, &swap_chain_container)
+            .expect("Failed to create image views");
 
         let result = Self {
-            _entry : entry,
+            _entry: entry,
             instance,
             _validation: validation,
             debug,
@@ -70,17 +107,23 @@ impl VulkanApp {
             _physical_device: physical_device,
             logical_device,
             queues,
+            swap_chain_container,
+            image_views_container,
         };
 
         result
     }
 
     fn get_graphics_queue(&self) -> &ash::vk::Queue {
-        self.queues.get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS)).expect("Failed to get graphics queue")
+        self.queues
+            .get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS))
+            .expect("Failed to get graphics queue")
     }
 
     fn get_present_queue(&self) -> &ash::vk::Queue {
-        self.queues.get(&QueueType::PresentQueue).expect("Failed to get present queue")
+        self.queues
+            .get(&QueueType::PresentQueue)
+            .expect("Failed to get present queue")
     }
 
     fn create_instance(entry: &ash::Entry, validation: &VulkanValidation) -> Result<ash::Instance> {
@@ -132,11 +175,19 @@ impl VulkanApp {
 }
 
 impl Drop for VulkanApp {
-    fn drop(&mut self) { 
+    fn drop(&mut self) {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
+            for &image_view in &self.image_views_container.image_views {
+                self.logical_device.destroy_image_view(image_view, None);
+            }
+            self.swap_chain_container
+                .swap_chain_loader
+                .destroy_swapchain(self.swap_chain_container.swap_chain, None);
             self.logical_device.destroy_device(None);
-            self.surface_container.surface_loader.destroy_surface(self.surface_container.surface, None);
+            self.surface_container
+                .surface_loader
+                .destroy_surface(self.surface_container.surface, None);
             self.debug.destroy_debug_messenger();
             self.instance.destroy_instance(None);
         }
@@ -147,7 +198,6 @@ struct Main;
 
 impl Main {
     fn main_loop(vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window) {
-
         event_loop.run(move |event, _, control_flow| {
             // using this is kind of a dirty trick because i want to move vulkan_app into the event_loop FnMut callback
             // the reason to do that is because the FnMut closure gets dropped when the event loop exits
@@ -156,30 +206,26 @@ impl Main {
             let _vulkan_app_to_drop_when_closure_exits = &vulkan_app;
 
             match event {
-                Event::WindowEvent { event, .. } => {
-                    match event {
-                        WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit
-                        },
-                        WindowEvent::KeyboardInput { input, .. } => {
-                            match input {
-                                KeyboardInput { virtual_keycode, state, .. } => {
-                                    match (virtual_keycode, state) {
-                                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                            *control_flow = ControlFlow::Exit
-                                        },
-                                        _ => {},
-                                    }
-                                },
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::KeyboardInput { input, .. } => match input {
+                        KeyboardInput {
+                            virtual_keycode,
+                            state,
+                            ..
+                        } => match (virtual_keycode, state) {
+                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                                *control_flow = ControlFlow::Exit
                             }
+                            _ => {}
                         },
-                        _ => {},
-                    }
+                    },
+                    _ => {}
                 },
                 Event::MainEventsCleared => {
                     window.request_redraw();
-                },
-                _ => {},
+                }
+                _ => {}
             }
         });
     }
