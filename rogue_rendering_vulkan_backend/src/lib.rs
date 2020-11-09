@@ -1,6 +1,7 @@
 extern crate rustylog;
 
 pub mod devices;
+pub mod graphics_pipeline;
 pub mod presentation;
 pub mod util;
 

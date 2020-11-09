@@ -12,6 +12,8 @@ pub enum VulkanError {
     PhysicalDeviceNoGPU,
     QueueCreationFailed,
     RequiredValidationLayersUnsupported,
+    // shaders
+    ShaderFileReadFailure(String),
     // swap chain errors
     SwapChainFormatsError,
     SwapExtentFailedToGetCurrentMonitor,
@@ -33,15 +35,18 @@ impl fmt::Display for VulkanError {
             VulkanError::QueueCreationFailed => write!(f, "Failed to create queue indices"),
             VulkanError::RequiredValidationLayersUnsupported => {
                 write!(f, "Not all required validation layers are supported")
-            }
+            },
+            VulkanError::ShaderFileReadFailure(error_string) => {
+                write!(f, "Failed to read shader: {}", error_string)
+            },
             VulkanError::SwapChainFormatsError => write!(f, "Failed to choose a swap chain format"),
             VulkanError::SwapExtentFailedToGetCurrentMonitor => {
                 write!(f, "Failed to choose a swap extent")
-            }
+            },
             VulkanError::VkError(msg) => write!(f, "Error from vk::Result: {}", msg),
             VulkanError::VulkanStringConversionError => {
                 write!(f, "Failed to convert vulkan string to string")
-            }
+            },
             VulkanError::VulkanUsizeConversionError => write!(f, "Failed to convert usize"),
         }
     }
