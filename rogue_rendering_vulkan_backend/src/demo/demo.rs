@@ -4,6 +4,8 @@ use rogue_rendering_vulkan_backend::devices::queues::{
     create_queues, QueueFamilyIndices, QueueType,
 };
 use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
+use rogue_rendering_vulkan_backend::drawing::framebuffers;
+use rogue_rendering_vulkan_backend::graphics_pipeline::GraphicsPipeline;
 use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
 use rogue_rendering_vulkan_backend::presentation::swap_chain::{
     SwapChainContainer, SwapChainSupportDetails,
@@ -50,6 +52,8 @@ struct VulkanApp {
     queues: HashMap<QueueType, ash::vk::Queue>,
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
+    graphics_pipeline: GraphicsPipeline,
+    framebuffers: Vec<vk::Framebuffer>,
 }
 
 impl VulkanApp {
@@ -98,6 +102,11 @@ impl VulkanApp {
         let image_views_container = ImageViews::create(&logical_device, &swap_chain_container)
             .expect("Failed to create image views");
 
+        let graphics_pipeline = GraphicsPipeline::create(&logical_device, &swap_chain_container)
+            .expect("Failed to create graphics pipeline");
+
+        let framebuffers = framebuffers::create_framebuffers(&logical_device, &graphics_pipeline, &image_views_container, &swap_chain_container).expect("Failed to create framebuffers");
+
         let result = Self {
             _entry: entry,
             instance,
@@ -109,6 +118,8 @@ impl VulkanApp {
             queues,
             swap_chain_container,
             image_views_container,
+            graphics_pipeline,
+            framebuffers,
         };
 
         result
@@ -178,6 +189,15 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
+            for framebuffer in self.framebuffers.iter() {
+                self.logical_device.destroy_framebuffer(*framebuffer, None);
+            }
+            self.logical_device.destroy_pipeline(self.graphics_pipeline.pipeline, None);
+            self.logical_device
+                .destroy_pipeline_layout(self.graphics_pipeline.pipeline_layout, None);
+            
+            self.logical_device.destroy_render_pass(self.graphics_pipeline.render_pass, None);
+            
             for &image_view in &self.image_views_container.image_views {
                 self.logical_device.destroy_image_view(image_view, None);
             }
