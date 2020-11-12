@@ -20,6 +20,12 @@ pub struct GraphicsPipeline {
 }
 
 impl GraphicsPipeline {
+    pub const CLEAR_COLORS: [vk::ClearValue; 1] = [vk::ClearValue {
+        color: vk::ClearColorValue {
+            float32: [0.0, 0.0, 0.0, 1.0],
+        },
+    }];
+
     pub fn create(
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
@@ -144,7 +150,6 @@ impl GraphicsPipeline {
         let pipeline_layout =
             unsafe { logical_device.create_pipeline_layout(&pipeline_layout_create_info, None)? };
 
-
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo {
             // programmable stages
             stage_count: u32::try_from(pipeline_stages.len())?,
@@ -170,7 +175,11 @@ impl GraphicsPipeline {
 
         let graphics_pipeline_infos = [pipeline_create_info];
         let graphics_pipeline_result = unsafe {
-            logical_device.create_graphics_pipelines(vk::PipelineCache::null(), &graphics_pipeline_infos, None)
+            logical_device.create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &graphics_pipeline_infos,
+                None,
+            )
         };
 
         let graphics_pipelines = match graphics_pipeline_result {
@@ -179,7 +188,7 @@ impl GraphicsPipeline {
         };
 
         if graphics_pipelines.is_empty() {
-            return Err(VulkanError::PipelineCreateError)
+            return Err(VulkanError::PipelineCreateError);
         }
         let pipeline = graphics_pipelines[0];
 

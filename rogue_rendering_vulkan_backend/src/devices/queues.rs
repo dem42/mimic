@@ -16,6 +16,7 @@ pub enum QueueType {
 
 pub struct QueueFamilyIndices {
     pub indices: HashMap<u32, Vec<QueueType>>,
+    pub queue_index_map: HashMap<QueueType, u32>,
 }
 
 pub struct QueueFamilyCreateData(pub u32, pub u32, pub Vec<f32>);
@@ -98,9 +99,19 @@ impl QueueFamilyIndices {
             }
         }
 
+        let mut queue_index_map = HashMap::new();
+        for (&queue_family_index, queue_types_set) in indices.iter() {
+            for &queue_type in queue_types_set {
+                queue_index_map.insert(queue_type, queue_family_index);
+            }
+        }
+
         log!(Log::Info, "Found indices: {:?}", indices);
 
-        Ok(QueueFamilyIndices { indices })
+        Ok(QueueFamilyIndices {
+            indices,
+            queue_index_map,
+        })
     }
 
     pub fn get_image_sharing_details(&self) -> (vk::SharingMode, usize, Vec<u32>) {

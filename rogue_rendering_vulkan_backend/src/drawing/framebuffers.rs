@@ -1,6 +1,6 @@
+use crate::graphics_pipeline::GraphicsPipeline;
 use crate::presentation::image_views::ImageViews;
 use crate::presentation::swap_chain::SwapChainContainer;
-use crate::graphics_pipeline::GraphicsPipeline;
 use crate::util::result::Result;
 
 use ash::version::DeviceV1_0;
@@ -9,12 +9,11 @@ use ash::vk;
 use std::convert::TryFrom;
 
 pub fn create_framebuffers(
-    logical_device: &ash::Device, 
-    graphics_pipeline: &GraphicsPipeline, 
+    logical_device: &ash::Device,
+    graphics_pipeline: &GraphicsPipeline,
     image_views: &ImageViews,
-    swap_chain_container: &SwapChainContainer)
--> Result<Vec<vk::Framebuffer>>
-{
+    swap_chain_container: &SwapChainContainer,
+) -> Result<Vec<vk::Framebuffer>> {
     let mut framebuffers = Vec::with_capacity(image_views.image_views.len());
     for image_view in image_views.image_views.iter() {
         let attachments = [*image_view];
@@ -29,9 +28,8 @@ pub fn create_framebuffers(
             ..Default::default()
         };
 
-        let framebuffer = unsafe {
-            logical_device.create_framebuffer(&framebuffer_create_info, None)?
-        };
+        let framebuffer =
+            unsafe { logical_device.create_framebuffer(&framebuffer_create_info, None)? };
         framebuffers.push(framebuffer);
     }
     Ok(framebuffers)

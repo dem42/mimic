@@ -4,6 +4,7 @@ use rogue_rendering_vulkan_backend::devices::queues::{
     create_queues, QueueFamilyIndices, QueueType,
 };
 use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
+use rogue_rendering_vulkan_backend::drawing::command_buffers;
 use rogue_rendering_vulkan_backend::drawing::framebuffers;
 use rogue_rendering_vulkan_backend::graphics_pipeline::GraphicsPipeline;
 use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
@@ -54,6 +55,8 @@ struct VulkanApp {
     image_views_container: ImageViews,
     graphics_pipeline: GraphicsPipeline,
     framebuffers: Vec<vk::Framebuffer>,
+    command_pool: vk::CommandPool,
+    _command_buffers: Vec<vk::CommandBuffer>,
 }
 
 impl VulkanApp {
@@ -105,7 +108,26 @@ impl VulkanApp {
         let graphics_pipeline = GraphicsPipeline::create(&logical_device, &swap_chain_container)
             .expect("Failed to create graphics pipeline");
 
-        let framebuffers = framebuffers::create_framebuffers(&logical_device, &graphics_pipeline, &image_views_container, &swap_chain_container).expect("Failed to create framebuffers");
+        let framebuffers = framebuffers::create_framebuffers(
+            &logical_device,
+            &graphics_pipeline,
+            &image_views_container,
+            &swap_chain_container,
+        )
+        .expect("Failed to create framebuffers");
+
+        let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)
+            .expect("Failed to create command pool");
+
+        // command buffers are released when we destroy the pool
+        let command_buffers = command_buffers::create_command_buffers(
+            &logical_device,
+            &command_pool,
+            &framebuffers,
+            &graphics_pipeline,
+            &swap_chain_container,
+        )
+        .expect("Failed to create command buffers");
 
         let result = Self {
             _entry: entry,
@@ -120,10 +142,14 @@ impl VulkanApp {
             image_views_container,
             graphics_pipeline,
             framebuffers,
+            command_pool,
+            _command_buffers: command_buffers,
         };
 
         result
     }
+
+    fn draw_frame(&mut self) {}
 
     fn get_graphics_queue(&self) -> &ash::vk::Queue {
         self.queues
@@ -189,15 +215,20 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
+            self.logical_device
+                .destroy_command_pool(self.command_pool, None);
+
             for framebuffer in self.framebuffers.iter() {
                 self.logical_device.destroy_framebuffer(*framebuffer, None);
             }
-            self.logical_device.destroy_pipeline(self.graphics_pipeline.pipeline, None);
+            self.logical_device
+                .destroy_pipeline(self.graphics_pipeline.pipeline, None);
             self.logical_device
                 .destroy_pipeline_layout(self.graphics_pipeline.pipeline_layout, None);
-            
-            self.logical_device.destroy_render_pass(self.graphics_pipeline.render_pass, None);
-            
+
+            self.logical_device
+                .destroy_render_pass(self.graphics_pipeline.render_pass, None);
+
             for &image_view in &self.image_views_container.image_views {
                 self.logical_device.destroy_image_view(image_view, None);
             }
@@ -217,7 +248,7 @@ impl Drop for VulkanApp {
 struct Main;
 
 impl Main {
-    fn main_loop(vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window) {
+    fn main_loop(mut vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window) {
         event_loop.run(move |event, _, control_flow| {
             // using this is kind of a dirty trick because i want to move vulkan_app into the event_loop FnMut callback
             // the reason to do that is because the FnMut closure gets dropped when the event loop exits
@@ -244,6 +275,9 @@ impl Main {
                 },
                 Event::MainEventsCleared => {
                     window.request_redraw();
+                }
+                Event::RedrawRequested(_window_id) => {
+                    vulkan_app.draw_frame();
                 }
                 _ => {}
             }
