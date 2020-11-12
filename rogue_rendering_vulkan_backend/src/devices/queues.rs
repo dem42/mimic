@@ -137,13 +137,11 @@ pub fn create_queues(
     logical_device: &ash::Device,
 ) -> Result<HashMap<QueueType, ash::vk::Queue>> {
     let mut queue_map = HashMap::new();
-    for (&queue_family_index, queue_types_set) in queue_indices.indices.iter() {
+    for (&queue_type, &queue_family_index) in queue_indices.queue_index_map.iter() {
         let QueueFamilyCreateData(queue_family_index, _, _) =
             QueueFamilyIndices::get_best_queue_family_data(queue_family_index);
         let queue = unsafe { logical_device.get_device_queue(queue_family_index, 0) };
-        for &queue_type in queue_types_set {
-            queue_map.insert(queue_type, queue);
-        }
+        queue_map.insert(queue_type, queue);
     }
     Ok(queue_map)
 }
