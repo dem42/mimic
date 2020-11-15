@@ -7,10 +7,14 @@ pub type Result<T> = std::result::Result<T, VulkanError>;
 
 #[derive(Debug, Clone)]
 pub enum VulkanError {
+    CommandBufferNotAvailable(usize),
     LogicalDeviceCreateError,
     NoValidationLayers,
     PhysicalDeviceNoGPU,
+    // queues
     QueueCreationFailed,
+    QueueGraphicsNotFound,
+    QueuePresentNotFound,
     // Pipeline
     PipelineCreateError,
     // validation
@@ -29,6 +33,9 @@ pub enum VulkanError {
 impl fmt::Display for VulkanError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            VulkanError::CommandBufferNotAvailable(index) => {
+                write!(f, "Failed to find command buffer with index: {}", index)
+            }
             VulkanError::LogicalDeviceCreateError => write!(f, "Failed to create logical device"),
             VulkanError::NoValidationLayers => write!(f, "No available layers"),
             VulkanError::PhysicalDeviceNoGPU => write!(
@@ -36,6 +43,8 @@ impl fmt::Display for VulkanError {
                 "Failed to create physical device. No GPU with supported functions"
             ),
             VulkanError::QueueCreationFailed => write!(f, "Failed to create queue indices"),
+            VulkanError::QueueGraphicsNotFound => write!(f, "Failed to find graphics queue"),
+            VulkanError::QueuePresentNotFound => write!(f, "Failed to find present queue"),
             VulkanError::PipelineCreateError => write!(f, "Failed to create graphics pipeline"),
             VulkanError::RequiredValidationLayersUnsupported => {
                 write!(f, "Not all required validation layers are supported")

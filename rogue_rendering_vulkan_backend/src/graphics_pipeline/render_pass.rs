@@ -40,11 +40,31 @@ pub fn create_render_pass(
         ..Default::default()
     };
 
+    // subpasses can specify what needs to happen before using subpass dependencies
+    // this is done because image layout transitions which subpasses specify happen automatically
+    // but due to synchronization we need to make sure we do them at the right time
+    // which is what we use the subpass dependencies for here
+    let subpass_dependency = vk::SubpassDependency {
+        // special value for the operations that happen before (if in src) or after (in dst) subpasses
+        src_subpass: vk::SUBPASS_EXTERNAL,
+        // index of our subpass
+        dst_subpass: 0,
+        // wait for swapchain to finish reading from the image, before we access it
+        src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+        src_access_mask: vk::AccessFlags::empty(),
+        // prevent image layout transition from happening until it is necessary (when we start writing to it)
+        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+        dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+        ..Default::default()
+    };
+
     let render_pass_create_info = vk::RenderPassCreateInfo {
         attachment_count: 1,
         p_attachments: &color_attachment,
         subpass_count: 1,
         p_subpasses: &subpass,
+        dependency_count: 1,
+        p_dependencies: &subpass_dependency,
         ..Default::default()
     };
 

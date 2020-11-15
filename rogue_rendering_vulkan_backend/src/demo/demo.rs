@@ -4,8 +4,8 @@ use rogue_rendering_vulkan_backend::devices::queues::{
     create_queues, QueueFamilyIndices, QueueType,
 };
 use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
-use rogue_rendering_vulkan_backend::drawing::command_buffers;
-use rogue_rendering_vulkan_backend::drawing::framebuffers;
+use rogue_rendering_vulkan_backend::drawing::synchronization::SynchronizationContainer;
+use rogue_rendering_vulkan_backend::drawing::{command_buffers, framebuffers};
 use rogue_rendering_vulkan_backend::graphics_pipeline::GraphicsPipeline;
 use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
 use rogue_rendering_vulkan_backend::presentation::swap_chain::{
@@ -22,6 +22,7 @@ use rustylog::{log, Log};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::ffi::CString;
 use std::ptr;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -56,7 +57,8 @@ struct VulkanApp {
     graphics_pipeline: GraphicsPipeline,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
-    _command_buffers: Vec<vk::CommandBuffer>,
+    command_buffers: Vec<vk::CommandBuffer>,
+    sync_container: SynchronizationContainer,
 }
 
 impl VulkanApp {
@@ -129,6 +131,9 @@ impl VulkanApp {
         )
         .expect("Failed to create command buffers");
 
+        let sync_container =
+            SynchronizationContainer::create(&logical_device, &swap_chain_container).expect("Failed to create semaphores");
+
         let result = Self {
             _entry: entry,
             instance,
@@ -143,24 +148,125 @@ impl VulkanApp {
             graphics_pipeline,
             framebuffers,
             command_pool,
-            _command_buffers: command_buffers,
+            command_buffers,
+            sync_container,
         };
 
         result
     }
 
-    fn draw_frame(&mut self) {}
+    fn draw_frame(&mut self) -> Result<()> {
+        let cpu_gpu_to_wait_for = [self.sync_container.get_in_flight_fence()];
+        unsafe {
+            self.logical_device.wait_for_fences(&cpu_gpu_to_wait_for, true, u64::MAX)?;
+        }
 
-    fn get_graphics_queue(&self) -> &ash::vk::Queue {
-        self.queues
-            .get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS))
-            .expect("Failed to get graphics queue")
+        // get an available image from the swapchain
+        let timeout = u64::MAX;
+        let (available_image_index_u32, _is_suboptimal) = unsafe {
+            self.swap_chain_container
+                .swap_chain_loader
+                .acquire_next_image(
+                    self.swap_chain_container.swap_chain,
+                    timeout,
+                    self.sync_container.get_image_available_semaphore(),
+                    vk::Fence::null(),
+                )?
+        };
+        let available_image_index = usize::try_from(available_image_index_u32)?;
+
+        // wait on fence to see if image isn't being used already by an in-flight frame
+        if self.sync_container.images_in_flight_fences[available_image_index] != vk::Fence::null() {
+            let image_fence = [self.sync_container.images_in_flight_fences[available_image_index]];
+            unsafe {
+                self.logical_device.wait_for_fences(&image_fence, true, u64::MAX)?;
+            }
+        }
+        // save the fence that will be used for the image used by this in-flight frame
+        self.sync_container.images_in_flight_fences[available_image_index] = self.sync_container.get_in_flight_fence();
+
+
+        // specify that we want to delay the execution of the submit of the command buffer
+        // specificially, we want to wait until the wiriting to the color attachment is done on the available image
+        let wait_semaphores = [self.sync_container.get_image_available_semaphore()];
+        let wait_semaphores_count = u32::try_from(wait_semaphores.len())?;
+        let wait_stages: Vec<_> = wait_semaphores
+            .iter()
+            .map(|_x| vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .collect();
+
+        let command_buffer_ptr = if !self.command_buffers.is_empty() {
+            &self.command_buffers[available_image_index]
+        } else {
+            return Err(VulkanError::CommandBufferNotAvailable(
+                available_image_index,
+            ));
+        };
+
+        let signal_semaphores = [self.sync_container.get_render_finished_semaphore()];
+        let signal_semaphores_count = u32::try_from(signal_semaphores.len())?;
+
+        let command_buffer_submit_infos = [vk::SubmitInfo {
+            wait_semaphore_count: wait_semaphores_count,
+            p_wait_semaphores: wait_semaphores.as_ptr(),
+            p_wait_dst_stage_mask: wait_stages.as_ptr(),
+            command_buffer_count: 1,
+            p_command_buffers: command_buffer_ptr,
+            signal_semaphore_count: signal_semaphores_count,
+            p_signal_semaphores: signal_semaphores.as_ptr(),
+            ..Default::default()
+        }];
+        
+        let graphics_queue = self.get_graphics_queue()?;
+        let cpu_gpu_fence = self.sync_container.get_in_flight_fence();
+        unsafe {
+            self.logical_device.reset_fences(&[cpu_gpu_fence])?;
+            self.logical_device
+                .queue_submit(graphics_queue, &command_buffer_submit_infos, cpu_gpu_fence)?
+        }
+
+        // present the image to swap chain
+        let swap_chains = [self.swap_chain_container.swap_chain];
+        let swap_chain_count = u32::try_from(swap_chains.len())?;
+        let present_info = vk::PresentInfoKHR {
+            wait_semaphore_count: signal_semaphores_count,
+            p_wait_semaphores: signal_semaphores.as_ptr(),
+            p_swapchains: swap_chains.as_ptr(),
+            swapchain_count: swap_chain_count,
+            p_image_indices: &available_image_index_u32,
+            ..Default::default()
+        };
+
+        let present_queue = self.get_present_queue()?;
+        let _is_suboptimal = unsafe {
+            self.swap_chain_container.swap_chain_loader
+                .queue_present(present_queue, &present_info)?
+        };
+
+        self.sync_container.update_frame_counter();
+
+        Ok(())
     }
 
-    fn get_present_queue(&self) -> &ash::vk::Queue {
+    fn wait_until_device_idle(&self) -> Result<()> {
+        unsafe {
+            self.logical_device.device_wait_idle()?;
+        }
+        Ok(())
+    }
+
+    fn get_graphics_queue(&self) -> Result<ash::vk::Queue> {
+        self.queues
+            .get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS))
+            .map(|&x| x)
+            .ok_or(VulkanError::QueueGraphicsNotFound)
+    }
+
+    fn get_present_queue(&self) -> Result<ash::vk::Queue> {
         self.queues
             .get(&QueueType::PresentQueue)
-            .expect("Failed to get present queue")
+            .map(|&x| x)
+            .ok_or(VulkanError::QueuePresentNotFound)
     }
 
     fn create_instance(entry: &ash::Entry, validation: &VulkanValidation) -> Result<ash::Instance> {
@@ -215,6 +321,7 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
+            self.sync_container.destroy(&self.logical_device);
             self.logical_device
                 .destroy_command_pool(self.command_pool, None);
 
@@ -250,15 +357,11 @@ struct Main;
 impl Main {
     fn main_loop(mut vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window) {
         event_loop.run(move |event, _, control_flow| {
-            // using this is kind of a dirty trick because i want to move vulkan_app into the event_loop FnMut callback
-            // the reason to do that is because the FnMut closure gets dropped when the event loop exits
-            // but because after the event loop exits winit simply std::process:exits which means nothing that hasn't been moved into
-            // the callback closure will get Dropped -> so move vulkan app into it by taking a immutable borrow everytime this FnMut is called
-            let _vulkan_app_to_drop_when_closure_exits = &vulkan_app;
-
             match event {
                 Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::CloseRequested => {
+                        Self::exit(control_flow);
+                    },
                     WindowEvent::KeyboardInput { input, .. } => match input {
                         KeyboardInput {
                             virtual_keycode,
@@ -266,7 +369,7 @@ impl Main {
                             ..
                         } => match (virtual_keycode, state) {
                             (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                *control_flow = ControlFlow::Exit
+                                Self::exit(control_flow);
                             }
                             _ => {}
                         },
@@ -275,13 +378,27 @@ impl Main {
                 },
                 Event::MainEventsCleared => {
                     window.request_redraw();
-                }
+                },
                 Event::RedrawRequested(_window_id) => {
-                    vulkan_app.draw_frame();
-                }
+                    let frame_result = vulkan_app.draw_frame();                    
+                    if let Err(error) = frame_result {
+                        log!(Log::Error, "Failed to draw frame: {}", error);                        
+                    }
+                },
+                Event::LoopDestroyed => {
+                    log!(Log::Info, "In exit main loop");
+                    let wait_result = vulkan_app.wait_until_device_idle();
+                    if let Err(error) = wait_result {
+                        log!(Log::Error, "Failed while waiting until device idle: {}", error);            
+                    }
+                },
                 _ => {}
             }
         });
+    }
+
+    fn exit(control_flow: &mut ControlFlow) {
+        *control_flow = ControlFlow::Exit
     }
 }
 
@@ -291,9 +408,6 @@ fn main() {
     let window = VulkanApp::init_window(&event_loop);
 
     let vulkan_app = VulkanApp::new(&window);
-
-    vulkan_app.get_graphics_queue();
-    vulkan_app.get_present_queue();
 
     Main::main_loop(vulkan_app, event_loop, window);
 }
