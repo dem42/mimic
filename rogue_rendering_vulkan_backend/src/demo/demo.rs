@@ -19,6 +19,7 @@ use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 
 use rustylog::{log, Log};
 
+use ash::prelude::VkResult;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use std::collections::HashMap;
@@ -49,8 +50,9 @@ struct VulkanApp {
     _validation: VulkanValidation,
     debug: VulkanDebug,
     surface_container: SurfaceContainer,
-    _physical_device: vk::PhysicalDevice,
+    physical_device: vk::PhysicalDevice,
     logical_device: ash::Device,
+    queue_indices: QueueFamilyIndices,
     queues: HashMap<QueueType, ash::vk::Queue>,
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
@@ -59,7 +61,11 @@ struct VulkanApp {
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     sync_container: SynchronizationContainer,
+    buffer_resized: bool,
+    buffer_minimized: bool,
 }
+
+enum ResizeDetectedLocation { InAcquire, InPresent }
 
 impl VulkanApp {
     fn new(window: &Window) -> Self {
@@ -93,7 +99,70 @@ impl VulkanApp {
             &validation,
         )
         .expect("Failed to create logical device");
+
+        let sync_container =
+            SynchronizationContainer::create(&logical_device).expect("Failed to create semaphores");
+
+        let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)
+            .expect("Failed to create command pool");
+
         let queues = create_queues(&queue_indices, &logical_device).expect("Failed to get queues");
+
+        let (
+            swap_chain_container,
+            image_views_container,
+            graphics_pipeline,
+            framebuffers,
+            command_buffers,
+        ) = Self::create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
+            &instance,
+            physical_device,
+            &logical_device,
+            &queue_indices,
+            &surface_container,
+            &command_pool,
+            &window,
+        );
+
+        let result = Self {
+            _entry: entry,
+            instance,
+            _validation: validation,
+            debug,
+            surface_container,
+            physical_device,
+            logical_device,
+            queue_indices,
+            queues,
+            swap_chain_container,
+            image_views_container,
+            graphics_pipeline,
+            framebuffers,
+            command_pool,
+            command_buffers,
+            sync_container,
+            buffer_resized: false,
+            buffer_minimized: false,
+        };
+
+        result
+    }
+
+    pub fn create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        logical_device: &ash::Device,
+        queue_indices: &QueueFamilyIndices,
+        surface_container: &SurfaceContainer,
+        command_pool: &vk::CommandPool,
+        window: &Window,
+    ) -> (
+        SwapChainContainer,
+        ImageViews,
+        GraphicsPipeline,
+        Vec<vk::Framebuffer>,
+        Vec<vk::CommandBuffer>,
+    ) {
         let swap_chain_container = SwapChainContainer::create(
             &instance,
             physical_device,
@@ -118,9 +187,6 @@ impl VulkanApp {
         )
         .expect("Failed to create framebuffers");
 
-        let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)
-            .expect("Failed to create command pool");
-
         // command buffers are released when we destroy the pool
         let command_buffers = command_buffers::create_command_buffers(
             &logical_device,
@@ -131,39 +197,84 @@ impl VulkanApp {
         )
         .expect("Failed to create command buffers");
 
-        let sync_container =
-            SynchronizationContainer::create(&logical_device, &swap_chain_container).expect("Failed to create semaphores");
-
-        let result = Self {
-            _entry: entry,
-            instance,
-            _validation: validation,
-            debug,
-            surface_container,
-            _physical_device: physical_device,
-            logical_device,
-            queues,
+        (
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
             framebuffers,
-            command_pool,
             command_buffers,
-            sync_container,
-        };
-
-        result
+        )
     }
 
-    fn draw_frame(&mut self) -> Result<()> {
+    pub fn recreate_swap_chain(&mut self, window: &Window) -> Result<()> {
+        unsafe {
+            self.logical_device.device_wait_idle()?;
+            self.cleanup_swap_chain();
+        }
+
+        let (
+            swap_chain_container,
+            image_views_container,
+            graphics_pipeline,
+            framebuffers,
+            command_buffers,
+        ) = Self::create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
+            &self.instance,
+            self.physical_device,
+            &self.logical_device,
+            &self.queue_indices,
+            &self.surface_container,
+            &self.command_pool,
+            window,
+        );
+
+        self.swap_chain_container = swap_chain_container;
+        self.image_views_container = image_views_container;
+        self.graphics_pipeline = graphics_pipeline;
+        self.framebuffers = framebuffers;
+        self.command_buffers = command_buffers;
+
+        Ok(())
+    }
+
+    fn handle_resize<A>(&mut self, location: ResizeDetectedLocation, result: &VkResult<A>, window: &Window) -> Result<bool> {
+        let resize_needed = match location {
+            ResizeDetectedLocation::InAcquire => match result {
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => true,                
+                Err(error) => return Err(VulkanError::VkError(error.to_string())),
+                Ok(_) => false,
+            },
+            ResizeDetectedLocation::InPresent => match result {
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => true,
+            Err(error) => return Err(VulkanError::VkError(error.to_string())),
+            // if a window event signaled that a resize happened then we want to handle the resize after image present
+            Ok(_) => self.buffer_resized,
+            },
+        };
+        let resize_happened = if resize_needed {
+            self.buffer_resized = false;
+            self.recreate_swap_chain(window)?;
+            true
+        } else {
+            false
+        };
+        Ok(resize_happened)
+    }
+
+    fn draw_frame(&mut self, window: &Window) -> Result<()> {
+        if self.buffer_minimized {
+            return Ok(());
+        }
+
         let cpu_gpu_to_wait_for = [self.sync_container.get_in_flight_fence()];
         unsafe {
-            self.logical_device.wait_for_fences(&cpu_gpu_to_wait_for, true, u64::MAX)?;
+            self.logical_device
+                .wait_for_fences(&cpu_gpu_to_wait_for, true, u64::MAX)?;
         }
 
         // get an available image from the swapchain
         let timeout = u64::MAX;
-        let (available_image_index_u32, _is_suboptimal) = unsafe {
+        let acquire_result = unsafe {
             self.swap_chain_container
                 .swap_chain_loader
                 .acquire_next_image(
@@ -171,20 +282,33 @@ impl VulkanApp {
                     timeout,
                     self.sync_container.get_image_available_semaphore(),
                     vk::Fence::null(),
-                )?
+                )
         };
+        if self.handle_resize(ResizeDetectedLocation::InAcquire, &acquire_result, window)? {
+            return Ok(());
+        }
+        let (available_image_index_u32, _) = acquire_result?;
         let available_image_index = usize::try_from(available_image_index_u32)?;
 
         // wait on fence to see if image isn't being used already by an in-flight frame
-        if self.sync_container.images_in_flight_fences[available_image_index] != vk::Fence::null() {
-            let image_fence = [self.sync_container.images_in_flight_fences[available_image_index]];
+        if self
+            .sync_container
+            .get_image_in_flight_fence(available_image_index)
+            != vk::Fence::null()
+        {
+            let image_fence = [self
+                .sync_container
+                .get_image_in_flight_fence(available_image_index)];
             unsafe {
-                self.logical_device.wait_for_fences(&image_fence, true, u64::MAX)?;
+                self.logical_device
+                    .wait_for_fences(&image_fence, true, u64::MAX)?;
             }
         }
         // save the fence that will be used for the image used by this in-flight frame
-        self.sync_container.images_in_flight_fences[available_image_index] = self.sync_container.get_in_flight_fence();
-
+        self.sync_container.set_image_in_flight_fence(
+            available_image_index,
+            self.sync_container.get_in_flight_fence(),
+        );
 
         // specify that we want to delay the execution of the submit of the command buffer
         // specificially, we want to wait until the wiriting to the color attachment is done on the available image
@@ -216,13 +340,16 @@ impl VulkanApp {
             p_signal_semaphores: signal_semaphores.as_ptr(),
             ..Default::default()
         }];
-        
+
         let graphics_queue = self.get_graphics_queue()?;
         let cpu_gpu_fence = self.sync_container.get_in_flight_fence();
         unsafe {
             self.logical_device.reset_fences(&[cpu_gpu_fence])?;
-            self.logical_device
-                .queue_submit(graphics_queue, &command_buffer_submit_infos, cpu_gpu_fence)?
+            self.logical_device.queue_submit(
+                graphics_queue,
+                &command_buffer_submit_infos,
+                cpu_gpu_fence,
+            )?
         }
 
         // present the image to swap chain
@@ -238,10 +365,13 @@ impl VulkanApp {
         };
 
         let present_queue = self.get_present_queue()?;
-        let _is_suboptimal = unsafe {
-            self.swap_chain_container.swap_chain_loader
-                .queue_present(present_queue, &present_info)?
+        let present_result = unsafe {
+            self.swap_chain_container
+                .swap_chain_loader
+                .queue_present(present_queue, &present_info)
         };
+
+        let _resize_happened = self.handle_resize(ResizeDetectedLocation::InPresent, &present_result, window)?;
 
         self.sync_container.update_frame_counter();
 
@@ -315,33 +445,41 @@ impl VulkanApp {
             .build(event_loop)
             .expect("Failed to create window.")
     }
+
+    unsafe fn cleanup_swap_chain(&self) {
+        for framebuffer in self.framebuffers.iter() {
+            self.logical_device.destroy_framebuffer(*framebuffer, None);
+        }
+
+        self.logical_device.free_command_buffers(self.command_pool, &self.command_buffers);
+
+        self.logical_device
+            .destroy_pipeline(self.graphics_pipeline.pipeline, None);
+        self.logical_device
+            .destroy_pipeline_layout(self.graphics_pipeline.pipeline_layout, None);
+
+        self.logical_device
+            .destroy_render_pass(self.graphics_pipeline.render_pass, None);
+
+        for &image_view in &self.image_views_container.image_views {
+            self.logical_device.destroy_image_view(image_view, None);
+        }
+        self.swap_chain_container
+            .swap_chain_loader
+            .destroy_swapchain(self.swap_chain_container.swap_chain, None);
+    }
 }
 
 impl Drop for VulkanApp {
     fn drop(&mut self) {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
+            self.cleanup_swap_chain();
+
             self.sync_container.destroy(&self.logical_device);
             self.logical_device
                 .destroy_command_pool(self.command_pool, None);
 
-            for framebuffer in self.framebuffers.iter() {
-                self.logical_device.destroy_framebuffer(*framebuffer, None);
-            }
-            self.logical_device
-                .destroy_pipeline(self.graphics_pipeline.pipeline, None);
-            self.logical_device
-                .destroy_pipeline_layout(self.graphics_pipeline.pipeline_layout, None);
-
-            self.logical_device
-                .destroy_render_pass(self.graphics_pipeline.render_pass, None);
-
-            for &image_view in &self.image_views_container.image_views {
-                self.logical_device.destroy_image_view(image_view, None);
-            }
-            self.swap_chain_container
-                .swap_chain_loader
-                .destroy_swapchain(self.swap_chain_container.swap_chain, None);
             self.logical_device.destroy_device(None);
             self.surface_container
                 .surface_loader
@@ -356,44 +494,56 @@ struct Main;
 
 impl Main {
     fn main_loop(mut vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window) {
-        event_loop.run(move |event, _, control_flow| {
-            match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested => {
-                        Self::exit(control_flow);
+        event_loop.run(move |event, _, control_flow| match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => {
+                    Self::exit(control_flow);
+                }
+                WindowEvent::KeyboardInput { input, .. } => match input {
+                    KeyboardInput {
+                        virtual_keycode,
+                        state,
+                        ..
+                    } => match (virtual_keycode, state) {
+                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                            Self::exit(control_flow);
+                        }
+                        _ => {}
                     },
-                    WindowEvent::KeyboardInput { input, .. } => match input {
-                        KeyboardInput {
-                            virtual_keycode,
-                            state,
-                            ..
-                        } => match (virtual_keycode, state) {
-                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                Self::exit(control_flow);
-                            }
-                            _ => {}
-                        },
-                    },
-                    _ => {}
                 },
-                Event::MainEventsCleared => {
-                    window.request_redraw();
-                },
-                Event::RedrawRequested(_window_id) => {
-                    let frame_result = vulkan_app.draw_frame();                    
-                    if let Err(error) = frame_result {
-                        log!(Log::Error, "Failed to draw frame: {}", error);                        
-                    }
-                },
-                Event::LoopDestroyed => {
-                    log!(Log::Info, "In exit main loop");
-                    let wait_result = vulkan_app.wait_until_device_idle();
-                    if let Err(error) = wait_result {
-                        log!(Log::Error, "Failed while waiting until device idle: {}", error);            
+                WindowEvent::Resized(winit::dpi::PhysicalSize{width, height}) => {
+                    log!(Log::Info, "Window was resized");
+                    vulkan_app.buffer_resized = true;
+                    if width == 0 || height == 0 {
+                        log!(Log::Info, "Window was minimized");
+                        vulkan_app.buffer_minimized = true;
+                    } else {
+                        vulkan_app.buffer_minimized = false;
                     }
                 },
                 _ => {}
+            },
+            Event::MainEventsCleared => {
+                window.request_redraw();
             }
+            Event::RedrawRequested(_window_id) => {
+                let frame_result = vulkan_app.draw_frame(&window);
+                if let Err(error) = frame_result {
+                    log!(Log::Error, "Failed to draw frame: {}", error);
+                }
+            }
+            Event::LoopDestroyed => {
+                log!(Log::Info, "In exit main loop");
+                let wait_result = vulkan_app.wait_until_device_idle();
+                if let Err(error) = wait_result {
+                    log!(
+                        Log::Error,
+                        "Failed while waiting until device idle: {}",
+                        error
+                    );
+                }
+            }
+            _ => {}
         });
     }
 

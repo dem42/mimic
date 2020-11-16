@@ -1,21 +1,23 @@
-use crate::util::result::Result;
 use crate::presentation::swap_chain::SwapChainContainer;
+use crate::util::result::Result;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+
+use std::collections::HashMap;
 
 pub struct SynchronizationContainer {
     image_available_semaphores: [vk::Semaphore; SynchronizationContainer::MAX_FRAMES_IN_FLIGHT],
     render_finished_semaphores: [vk::Semaphore; SynchronizationContainer::MAX_FRAMES_IN_FLIGHT],
     in_flight_fences: [vk::Fence; SynchronizationContainer::MAX_FRAMES_IN_FLIGHT],
-    pub images_in_flight_fences: Vec<vk::Fence>,
+    images_in_flight_fences: HashMap<usize, vk::Fence>,
     current_frame_idx: usize,
 }
 
 impl SynchronizationContainer {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn create(logical_device: &ash::Device, swap_chain_container: &SwapChainContainer) -> Result<Self> {
+    pub fn create(logical_device: &ash::Device) -> Result<Self> {
         let semaphore_create_info = vk::SemaphoreCreateInfo {
             ..Default::default()
         };
@@ -27,21 +29,18 @@ impl SynchronizationContainer {
 
         let mut image_available_semaphores = [vk::Semaphore::null(); Self::MAX_FRAMES_IN_FLIGHT];
         let mut render_finished_semaphores = [vk::Semaphore::null(); Self::MAX_FRAMES_IN_FLIGHT];
-        let mut in_flight_fences = [vk::Fence::null(); SynchronizationContainer::MAX_FRAMES_IN_FLIGHT];
+        let mut in_flight_fences =
+            [vk::Fence::null(); SynchronizationContainer::MAX_FRAMES_IN_FLIGHT];
 
         for i in 0..Self::MAX_FRAMES_IN_FLIGHT {
-            image_available_semaphores[i] = unsafe { 
-                logical_device.create_semaphore(&semaphore_create_info, None)? 
-            };
-            render_finished_semaphores[i] = unsafe { 
-                logical_device.create_semaphore(&semaphore_create_info, None)? 
-            };
-            in_flight_fences[i] = unsafe {
-                logical_device.create_fence(&fence_create_info, None)?
-            };
+            image_available_semaphores[i] =
+                unsafe { logical_device.create_semaphore(&semaphore_create_info, None)? };
+            render_finished_semaphores[i] =
+                unsafe { logical_device.create_semaphore(&semaphore_create_info, None)? };
+            in_flight_fences[i] = unsafe { logical_device.create_fence(&fence_create_info, None)? };
         }
 
-        let images_in_flight_fences = vec![vk::Fence::null(); swap_chain_container.swap_chain_images.len()];
+        let images_in_flight_fences = HashMap::new();
 
         Ok(Self {
             image_available_semaphores,
@@ -78,5 +77,17 @@ impl SynchronizationContainer {
 
     pub fn get_in_flight_fence(&self) -> vk::Fence {
         self.in_flight_fences[self.current_frame_idx]
+    }
+
+    pub fn set_image_in_flight_fence(&mut self, image_index: usize, fence: vk::Fence) {
+        self.images_in_flight_fences.insert(image_index, fence);
+    }
+
+    pub fn get_image_in_flight_fence(&self, image_index: usize) -> vk::Fence {
+        let result = self.images_in_flight_fences.get(&image_index);
+        match result {
+            Some(fence) => *fence,
+            None => vk::Fence::null(),
+        }
     }
 }
