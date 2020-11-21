@@ -9,6 +9,9 @@ pub type Result<T> = std::result::Result<T, VulkanError>;
 pub enum VulkanError {
     CommandBufferNotAvailable(usize),
     LogicalDeviceCreateError,
+    // memory
+    MemoryFailedToFindType,
+    // validation
     NoValidationLayers,
     PhysicalDeviceNoGPU,
     // queues
@@ -37,6 +40,7 @@ impl fmt::Display for VulkanError {
                 write!(f, "Failed to find command buffer with index: {}", index)
             }
             VulkanError::LogicalDeviceCreateError => write!(f, "Failed to create logical device"),
+            VulkanError::MemoryFailedToFindType => write!(f, "Failed to find suitable memory type"),
             VulkanError::NoValidationLayers => write!(f, "No available layers"),
             VulkanError::PhysicalDeviceNoGPU => write!(
                 f,

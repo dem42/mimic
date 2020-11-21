@@ -1,4 +1,3 @@
-use crate::presentation::swap_chain::SwapChainContainer;
 use crate::util::result::Result;
 
 use ash::version::DeviceV1_0;

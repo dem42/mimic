@@ -2,6 +2,7 @@ use crate::devices::queues::{QueueFamilyIndices, QueueType};
 use crate::graphics_pipeline::GraphicsPipeline;
 use crate::presentation::swap_chain::SwapChainContainer;
 use crate::util::result::Result;
+use crate::vertex_buffers::VertexBuffer;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -30,6 +31,7 @@ pub fn create_command_buffers(
     framebuffers: &Vec<vk::Framebuffer>,
     graphics_pipeline: &GraphicsPipeline,
     swap_chain_container: &SwapChainContainer,
+    vertex_buffer: &VertexBuffer,
 ) -> Result<Vec<vk::CommandBuffer>> {
     let num_framebuffers = framebuffers.len();
 
@@ -77,7 +79,16 @@ pub fn create_command_buffers(
                 graphics_pipeline.pipeline,
             );
 
-            let vertex_count = 3;
+            let vertex_buffers = [vertex_buffer.buffer];
+            let offsets: [vk::DeviceSize; 1] = [0];
+            logical_device.cmd_bind_vertex_buffers(
+                command_buffers[i],
+                0,
+                &vertex_buffers,
+                &offsets,
+            );
+
+            let vertex_count = u32::try_from(vertex_buffer.vertex_count)?;
             let instance_count = 1; // no instancing
             let first_vertex = 0;
             let first_instance = 0;

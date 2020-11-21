@@ -5,6 +5,7 @@ use crate::graphics_pipeline::render_pass::create_render_pass;
 use crate::graphics_pipeline::shader_module::create_shader_module;
 use crate::presentation::swap_chain::SwapChainContainer;
 use crate::util::result::{Result, VulkanError};
+use crate::vertex_buffers::vertex::Vertex;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -31,11 +32,11 @@ impl GraphicsPipeline {
         swap_chain_container: &SwapChainContainer,
     ) -> Result<Self> {
         let vert_shader = create_shader_module(
-            Path::new("rogue_rendering_vulkan_backend/shaders/spv/hardcoded_triangle.vert.spv"),
+            Path::new("rogue_rendering_vulkan_backend/shaders/spv/simple_triangle.vert.spv"),
             logical_device,
         )?;
         let frag_shader = create_shader_module(
-            Path::new("rogue_rendering_vulkan_backend/shaders/spv/hardcoded_triangle.frag.spv"),
+            Path::new("rogue_rendering_vulkan_backend/shaders/spv/simple_triangle.frag.spv"),
             logical_device,
         )?;
 
@@ -68,11 +69,14 @@ impl GraphicsPipeline {
         ////////////////////////////
         // FIXED FUNCTION stages
         ////////////////////////////
+        let vertex_input_binding = Vertex::get_binding_description()?;
+        let vertex_input_attributes = Vertex::get_attribute_descriptions()?;
+
         let vertex_input_create_info = vk::PipelineVertexInputStateCreateInfo {
-            vertex_binding_description_count: 0,
-            p_vertex_binding_descriptions: ptr::null(),
-            vertex_attribute_description_count: 0,
-            p_vertex_attribute_descriptions: ptr::null(),
+            vertex_binding_description_count: 1,
+            p_vertex_binding_descriptions: &vertex_input_binding,
+            vertex_attribute_description_count: u32::try_from(vertex_input_attributes.len())?,
+            p_vertex_attribute_descriptions: vertex_input_attributes.as_ptr(),
             ..Default::default()
         };
 

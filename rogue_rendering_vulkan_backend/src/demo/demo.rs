@@ -16,6 +16,7 @@ use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
 use rogue_rendering_vulkan_backend::util::platform::SurfaceContainer;
 use rogue_rendering_vulkan_backend::util::result::{Result, VulkanError};
 use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
+use rogue_rendering_vulkan_backend::vertex_buffers::VertexBuffer;
 
 use rustylog::{log, Log};
 
@@ -59,13 +60,17 @@ struct VulkanApp {
     graphics_pipeline: GraphicsPipeline,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
+    vertex_buffer: VertexBuffer,
     command_buffers: Vec<vk::CommandBuffer>,
     sync_container: SynchronizationContainer,
     buffer_resized: bool,
     buffer_minimized: bool,
 }
 
-enum ResizeDetectedLocation { InAcquire, InPresent }
+enum ResizeDetectedLocation {
+    InAcquire,
+    InPresent,
+}
 
 impl VulkanApp {
     fn new(window: &Window) -> Self {
@@ -108,6 +113,9 @@ impl VulkanApp {
 
         let queues = create_queues(&queue_indices, &logical_device).expect("Failed to get queues");
 
+        let vertex_buffer = VertexBuffer::create(&instance, physical_device, &logical_device)
+            .expect("Failed to create vertex buffer");
+
         let (
             swap_chain_container,
             image_views_container,
@@ -121,6 +129,7 @@ impl VulkanApp {
             &queue_indices,
             &surface_container,
             &command_pool,
+            &vertex_buffer,
             &window,
         );
 
@@ -139,6 +148,7 @@ impl VulkanApp {
             graphics_pipeline,
             framebuffers,
             command_pool,
+            vertex_buffer,
             command_buffers,
             sync_container,
             buffer_resized: false,
@@ -155,6 +165,7 @@ impl VulkanApp {
         queue_indices: &QueueFamilyIndices,
         surface_container: &SurfaceContainer,
         command_pool: &vk::CommandPool,
+        vertex_buffer: &VertexBuffer,
         window: &Window,
     ) -> (
         SwapChainContainer,
@@ -194,6 +205,7 @@ impl VulkanApp {
             &framebuffers,
             &graphics_pipeline,
             &swap_chain_container,
+            vertex_buffer,
         )
         .expect("Failed to create command buffers");
 
@@ -225,6 +237,7 @@ impl VulkanApp {
             &self.queue_indices,
             &self.surface_container,
             &self.command_pool,
+            &self.vertex_buffer,
             window,
         );
 
@@ -237,18 +250,23 @@ impl VulkanApp {
         Ok(())
     }
 
-    fn handle_resize<A>(&mut self, location: ResizeDetectedLocation, result: &VkResult<A>, window: &Window) -> Result<bool> {
+    fn handle_resize<A>(
+        &mut self,
+        location: ResizeDetectedLocation,
+        result: &VkResult<A>,
+        window: &Window,
+    ) -> Result<bool> {
         let resize_needed = match location {
             ResizeDetectedLocation::InAcquire => match result {
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => true,                
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => true,
                 Err(error) => return Err(VulkanError::VkError(error.to_string())),
                 Ok(_) => false,
             },
             ResizeDetectedLocation::InPresent => match result {
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => true,
-            Err(error) => return Err(VulkanError::VkError(error.to_string())),
-            // if a window event signaled that a resize happened then we want to handle the resize after image present
-            Ok(_) => self.buffer_resized,
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => true,
+                Err(error) => return Err(VulkanError::VkError(error.to_string())),
+                // if a window event signaled that a resize happened then we want to handle the resize after image present
+                Ok(_) => self.buffer_resized,
             },
         };
         let resize_happened = if resize_needed {
@@ -371,7 +389,8 @@ impl VulkanApp {
                 .queue_present(present_queue, &present_info)
         };
 
-        let _resize_happened = self.handle_resize(ResizeDetectedLocation::InPresent, &present_result, window)?;
+        let _resize_happened =
+            self.handle_resize(ResizeDetectedLocation::InPresent, &present_result, window)?;
 
         self.sync_container.update_frame_counter();
 
@@ -451,7 +470,8 @@ impl VulkanApp {
             self.logical_device.destroy_framebuffer(*framebuffer, None);
         }
 
-        self.logical_device.free_command_buffers(self.command_pool, &self.command_buffers);
+        self.logical_device
+            .free_command_buffers(self.command_pool, &self.command_buffers);
 
         self.logical_device
             .destroy_pipeline(self.graphics_pipeline.pipeline, None);
@@ -475,6 +495,11 @@ impl Drop for VulkanApp {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
             self.cleanup_swap_chain();
+
+            self.logical_device
+                .destroy_buffer(self.vertex_buffer.buffer, None);
+            self.logical_device
+                .free_memory(self.vertex_buffer.memory, None);
 
             self.sync_container.destroy(&self.logical_device);
             self.logical_device
@@ -511,7 +536,7 @@ impl Main {
                         _ => {}
                     },
                 },
-                WindowEvent::Resized(winit::dpi::PhysicalSize{width, height}) => {
+                WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
                     log!(Log::Info, "Window was resized");
                     vulkan_app.buffer_resized = true;
                     if width == 0 || height == 0 {
@@ -520,7 +545,7 @@ impl Main {
                     } else {
                         vulkan_app.buffer_minimized = false;
                     }
-                },
+                }
                 _ => {}
             },
             Event::MainEventsCleared => {
