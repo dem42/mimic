@@ -1,11 +1,11 @@
 pub mod render_pass;
 pub mod shader_module;
 
+use crate::buffers::vertex::Vertex;
 use crate::graphics_pipeline::render_pass::create_render_pass;
 use crate::graphics_pipeline::shader_module::create_shader_module;
 use crate::presentation::swap_chain::SwapChainContainer;
 use crate::util::result::{Result, VulkanError};
-use crate::vertex_buffers::vertex::Vertex;
 
 use ash::version::DeviceV1_0;
 use ash::vk;

@@ -14,6 +14,40 @@ pub enum QueueType {
     PresentQueue,
 }
 
+pub struct QueueMap {
+    queues: HashMap<QueueType, ash::vk::Queue>,
+}
+
+impl QueueMap {
+    pub fn create(
+        queue_indices: &QueueFamilyIndices,
+        logical_device: &ash::Device,
+    ) -> Result<Self> {
+        let mut queue_map = HashMap::new();
+        for (&queue_type, &queue_family_index) in queue_indices.queue_index_map.iter() {
+            let QueueFamilyCreateData(queue_family_index, _, _) =
+                QueueFamilyIndices::get_best_queue_family_data(queue_family_index);
+            let queue = unsafe { logical_device.get_device_queue(queue_family_index, 0) };
+            queue_map.insert(queue_type, queue);
+        }
+        Ok(Self { queues: queue_map })
+    }
+
+    pub fn get_graphics_queue(&self) -> Result<ash::vk::Queue> {
+        self.queues
+            .get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS))
+            .map(|&x| x)
+            .ok_or(VulkanError::QueueGraphicsNotFound)
+    }
+
+    pub fn get_present_queue(&self) -> Result<ash::vk::Queue> {
+        self.queues
+            .get(&QueueType::PresentQueue)
+            .map(|&x| x)
+            .ok_or(VulkanError::QueuePresentNotFound)
+    }
+}
+
 pub struct QueueFamilyIndices {
     pub indices: HashMap<u32, Vec<QueueType>>,
     pub queue_index_map: HashMap<QueueType, u32>,
@@ -130,20 +164,6 @@ impl QueueFamilyIndices {
     pub fn get_best_queue_family_data(queue_family_index: u32) -> QueueFamilyCreateData {
         QueueFamilyCreateData(queue_family_index, 1, vec![1.0_f32])
     }
-}
-
-pub fn create_queues(
-    queue_indices: &QueueFamilyIndices,
-    logical_device: &ash::Device,
-) -> Result<HashMap<QueueType, ash::vk::Queue>> {
-    let mut queue_map = HashMap::new();
-    for (&queue_type, &queue_family_index) in queue_indices.queue_index_map.iter() {
-        let QueueFamilyCreateData(queue_family_index, _, _) =
-            QueueFamilyIndices::get_best_queue_family_data(queue_family_index);
-        let queue = unsafe { logical_device.get_device_queue(queue_family_index, 0) };
-        queue_map.insert(queue_type, queue);
-    }
-    Ok(queue_map)
 }
 
 pub fn has_present_function(

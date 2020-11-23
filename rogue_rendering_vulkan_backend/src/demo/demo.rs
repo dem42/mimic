@@ -1,8 +1,8 @@
+use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
+use rogue_rendering_vulkan_backend::buffers::index_buffer::IndexBuffer;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
 use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
-use rogue_rendering_vulkan_backend::devices::queues::{
-    create_queues, QueueFamilyIndices, QueueType,
-};
+use rogue_rendering_vulkan_backend::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
 use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
 use rogue_rendering_vulkan_backend::drawing::synchronization::SynchronizationContainer;
 use rogue_rendering_vulkan_backend::drawing::{command_buffers, framebuffers};
@@ -16,14 +16,12 @@ use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
 use rogue_rendering_vulkan_backend::util::platform::SurfaceContainer;
 use rogue_rendering_vulkan_backend::util::result::{Result, VulkanError};
 use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
-use rogue_rendering_vulkan_backend::vertex_buffers::VertexBuffer;
 
 use rustylog::{log, Log};
 
 use ash::prelude::VkResult;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ffi::CString;
 use std::ptr;
@@ -54,13 +52,14 @@ struct VulkanApp {
     physical_device: vk::PhysicalDevice,
     logical_device: ash::Device,
     queue_indices: QueueFamilyIndices,
-    queues: HashMap<QueueType, ash::vk::Queue>,
+    queues: QueueMap,
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
     graphics_pipeline: GraphicsPipeline,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     vertex_buffer: VertexBuffer,
+    index_buffer: IndexBuffer,
     command_buffers: Vec<vk::CommandBuffer>,
     sync_container: SynchronizationContainer,
     buffer_resized: bool,
@@ -111,10 +110,26 @@ impl VulkanApp {
         let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)
             .expect("Failed to create command pool");
 
-        let queues = create_queues(&queue_indices, &logical_device).expect("Failed to get queues");
+        let queues =
+            QueueMap::create(&queue_indices, &logical_device).expect("Failed to get queues");
 
-        let vertex_buffer = VertexBuffer::create(&instance, physical_device, &logical_device)
-            .expect("Failed to create vertex buffer");
+        let vertex_buffer = VertexBuffer::create(
+            &instance,
+            physical_device,
+            &logical_device,
+            command_pool,
+            &queues,
+        )
+        .expect("Failed to create vertex buffer");
+
+        let index_buffer = IndexBuffer::create(
+            &instance,
+            physical_device,
+            &logical_device,
+            command_pool,
+            &queues,
+        )
+        .expect("Failed to create index buffer");
 
         let (
             swap_chain_container,
@@ -149,6 +164,7 @@ impl VulkanApp {
             framebuffers,
             command_pool,
             vertex_buffer,
+            index_buffer,
             command_buffers,
             sync_container,
             buffer_resized: false,
@@ -359,7 +375,7 @@ impl VulkanApp {
             ..Default::default()
         }];
 
-        let graphics_queue = self.get_graphics_queue()?;
+        let graphics_queue = self.queues.get_graphics_queue()?;
         let cpu_gpu_fence = self.sync_container.get_in_flight_fence();
         unsafe {
             self.logical_device.reset_fences(&[cpu_gpu_fence])?;
@@ -382,7 +398,7 @@ impl VulkanApp {
             ..Default::default()
         };
 
-        let present_queue = self.get_present_queue()?;
+        let present_queue = self.queues.get_present_queue()?;
         let present_result = unsafe {
             self.swap_chain_container
                 .swap_chain_loader
@@ -402,20 +418,6 @@ impl VulkanApp {
             self.logical_device.device_wait_idle()?;
         }
         Ok(())
-    }
-
-    fn get_graphics_queue(&self) -> Result<ash::vk::Queue> {
-        self.queues
-            .get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS))
-            .map(|&x| x)
-            .ok_or(VulkanError::QueueGraphicsNotFound)
-    }
-
-    fn get_present_queue(&self) -> Result<ash::vk::Queue> {
-        self.queues
-            .get(&QueueType::PresentQueue)
-            .map(|&x| x)
-            .ok_or(VulkanError::QueuePresentNotFound)
     }
 
     fn create_instance(entry: &ash::Entry, validation: &VulkanValidation) -> Result<ash::Instance> {
@@ -497,9 +499,14 @@ impl Drop for VulkanApp {
             self.cleanup_swap_chain();
 
             self.logical_device
-                .destroy_buffer(self.vertex_buffer.buffer, None);
+                .destroy_buffer(self.index_buffer.data.buffer, None);
             self.logical_device
-                .free_memory(self.vertex_buffer.memory, None);
+                .free_memory(self.index_buffer.data.memory, None);
+
+            self.logical_device
+                .destroy_buffer(self.vertex_buffer.data.buffer, None);
+            self.logical_device
+                .free_memory(self.vertex_buffer.data.memory, None);
 
             self.sync_container.destroy(&self.logical_device);
             self.logical_device

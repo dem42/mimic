@@ -1,8 +1,8 @@
+use crate::buffers::vertex_buffer::VertexBuffer;
 use crate::devices::queues::{QueueFamilyIndices, QueueType};
 use crate::graphics_pipeline::GraphicsPipeline;
 use crate::presentation::swap_chain::SwapChainContainer;
 use crate::util::result::Result;
-use crate::vertex_buffers::VertexBuffer;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -79,7 +79,7 @@ pub fn create_command_buffers(
                 graphics_pipeline.pipeline,
             );
 
-            let vertex_buffers = [vertex_buffer.buffer];
+            let vertex_buffers = [vertex_buffer.data.buffer];
             let offsets: [vk::DeviceSize; 1] = [0];
             logical_device.cmd_bind_vertex_buffers(
                 command_buffers[i],
