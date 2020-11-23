@@ -1,3 +1,4 @@
+use crate::buffers::index_buffer::IndexBuffer;
 use crate::buffers::vertex_buffer::VertexBuffer;
 use crate::devices::queues::{QueueFamilyIndices, QueueType};
 use crate::graphics_pipeline::GraphicsPipeline;
@@ -32,6 +33,7 @@ pub fn create_command_buffers(
     graphics_pipeline: &GraphicsPipeline,
     swap_chain_container: &SwapChainContainer,
     vertex_buffer: &VertexBuffer,
+    index_buffer: &IndexBuffer,
 ) -> Result<Vec<vk::CommandBuffer>> {
     let num_framebuffers = framebuffers.len();
 
@@ -88,15 +90,36 @@ pub fn create_command_buffers(
                 &offsets,
             );
 
-            let vertex_count = u32::try_from(vertex_buffer.vertex_count)?;
-            let instance_count = 1; // no instancing
-            let first_vertex = 0;
-            let first_instance = 0;
-            logical_device.cmd_draw(
+            logical_device.cmd_bind_index_buffer(
                 command_buffers[i],
-                vertex_count,
+                index_buffer.data.buffer,
+                0,
+                vk::IndexType::UINT16,
+            );
+
+            // let vertex_count = u32::try_from(vertex_buffer.vertex_count)?;
+            // let instance_count = 1; // no instancing
+            // let first_vertex = 0;
+            // let first_instance = 0;
+            // logical_device.cmd_draw(
+            //     command_buffers[i],
+            //     vertex_count,
+            //     instance_count,
+            //     first_vertex,
+            //     first_instance,
+            // );
+
+            let index_count = u32::try_from(index_buffer.index_count)?;
+            let instance_count = 1; // no instancing
+            let first_index = 0;
+            let vertex_offset = 0;
+            let first_instance = 0;
+            logical_device.cmd_draw_indexed(
+                command_buffers[i],
+                index_count,
                 instance_count,
-                first_vertex,
+                first_index,
+                vertex_offset,
                 first_instance,
             );
 

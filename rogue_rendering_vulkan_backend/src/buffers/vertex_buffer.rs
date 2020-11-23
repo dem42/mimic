@@ -21,14 +21,23 @@ impl VertexBuffer {
         command_pool: vk::CommandPool,
         queues: &QueueMap,
     ) -> Result<Self> {
-        let simple_triangle = Self::get_simple_triangle();
-        let size = vk::DeviceSize::try_from(std::mem::size_of_val(&simple_triangle))?;
+        let data = Self::get_rectangle();
+        let size = vk::DeviceSize::try_from(std::mem::size_of_val(&data))?;
 
-        let vertex_buffer = Buffer::create_and_fill(instance, physical_device, logical_device, command_pool, queues, size, &simple_triangle)?;
+        let vertex_buffer = Buffer::create_and_fill(
+            instance,
+            physical_device,
+            logical_device,
+            command_pool,
+            queues,
+            size,
+            &data,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+        )?;
 
         Ok(Self {
             data: vertex_buffer,
-            vertex_count: simple_triangle.len(),
+            vertex_count: data.len(),
         })
     }
 

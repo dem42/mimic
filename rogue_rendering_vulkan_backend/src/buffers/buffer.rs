@@ -51,6 +51,7 @@ impl Buffer {
         queues: &QueueMap,
         buffer_size: vk::DeviceSize,
         data: &[T],
+        usage: vk::BufferUsageFlags,
     ) -> Result<Self>
     where
         [T]: memory::MemoryCopyable,
@@ -75,7 +76,7 @@ impl Buffer {
             physical_device,
             logical_device,
             buffer_size,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::BufferUsageFlags::TRANSFER_DST | usage,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 

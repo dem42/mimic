@@ -32,7 +32,16 @@ impl IndexBuffer {
         let indices = Self::get_rectangle_indices();
         let size = vk::DeviceSize::try_from(std::mem::size_of_val(&indices))?;
 
-        let index_buffer = Buffer::create_and_fill(instance, physical_device, logical_device, command_pool, queues, size, &indices)?;
+        let index_buffer = Buffer::create_and_fill(
+            instance,
+            physical_device,
+            logical_device,
+            command_pool,
+            queues,
+            size,
+            &indices,
+            vk::BufferUsageFlags::INDEX_BUFFER,
+        )?;
 
         Ok(Self {
             data: index_buffer,

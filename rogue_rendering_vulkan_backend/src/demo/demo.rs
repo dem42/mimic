@@ -1,5 +1,5 @@
-use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
 use rogue_rendering_vulkan_backend::buffers::index_buffer::IndexBuffer;
+use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
 use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
 use rogue_rendering_vulkan_backend::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
@@ -145,6 +145,7 @@ impl VulkanApp {
             &surface_container,
             &command_pool,
             &vertex_buffer,
+            &index_buffer,
             &window,
         );
 
@@ -182,6 +183,7 @@ impl VulkanApp {
         surface_container: &SurfaceContainer,
         command_pool: &vk::CommandPool,
         vertex_buffer: &VertexBuffer,
+        index_buffer: &IndexBuffer,
         window: &Window,
     ) -> (
         SwapChainContainer,
@@ -222,6 +224,7 @@ impl VulkanApp {
             &graphics_pipeline,
             &swap_chain_container,
             vertex_buffer,
+            index_buffer,
         )
         .expect("Failed to create command buffers");
 
@@ -254,6 +257,7 @@ impl VulkanApp {
             &self.surface_container,
             &self.command_pool,
             &self.vertex_buffer,
+            &self.index_buffer,
             window,
         );
 
