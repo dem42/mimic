@@ -3,7 +3,8 @@ use crate::buffers::vertex_buffer::VertexBuffer;
 use crate::devices::queues::{QueueFamilyIndices, QueueType};
 use crate::graphics_pipeline::GraphicsPipeline;
 use crate::presentation::swap_chain::SwapChainContainer;
-use crate::util::result::Result;
+use crate::uniforms::descriptors::DescriptorData;
+use crate::util::result::{Result, VulkanError};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -34,6 +35,7 @@ pub fn create_command_buffers(
     swap_chain_container: &SwapChainContainer,
     vertex_buffer: &VertexBuffer,
     index_buffer: &IndexBuffer,
+    descriptor_data: &DescriptorData,
 ) -> Result<Vec<vk::CommandBuffer>> {
     let num_framebuffers = framebuffers.len();
 
@@ -95,6 +97,19 @@ pub fn create_command_buffers(
                 index_buffer.data.buffer,
                 0,
                 vk::IndexType::UINT16,
+            );
+
+            if i >= descriptor_data.descriptor_sets.len() {
+                return Err(VulkanError::DescriptorSetNotAvailable(i));
+            }
+            let descriptors_sets_to_bind = [descriptor_data.descriptor_sets[i]];          
+            logical_device.cmd_bind_descriptor_sets(
+                command_buffers[i], 
+                vk::PipelineBindPoint::GRAPHICS, 
+                graphics_pipeline.pipeline_layout, 
+                0, 
+                &descriptors_sets_to_bind, 
+                &[]
             );
 
             // let vertex_count = u32::try_from(vertex_buffer.vertex_count)?;

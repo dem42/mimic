@@ -13,11 +13,15 @@ ash = "0.31.0"
 winit = "0.23.0"
 nalgebra-glm = "0.9.0"
 memoffset = "0.6.1"
+thiserror = "1.0.23"
 
 [dependencies.rustylog]
 path = "../rustylog"
 default-features = false
 features = ["loginfo"]
+
+[dependencies.rustyutil]
+path = "../rustyutil"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.5", features = ["windef", "libloaderapi"] }

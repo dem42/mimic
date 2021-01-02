@@ -1,91 +1,57 @@
 use ash::vk;
-use std::fmt;
 use std::num::TryFromIntError;
 use std::str::Utf8Error;
 
+use thiserror::Error;
+
 pub type Result<T> = std::result::Result<T, VulkanError>;
 
-#[derive(Debug, Clone)]
+#[derive(Error, Debug, Clone)]
 pub enum VulkanError {
+    #[error("Failed to find command buffer with index: {0}")]
     CommandBufferNotAvailable(usize),
+    // descriptors
+    #[error("Incorrect number of descriptors sets: {0}")]
+    DescriptorSetNotAvailable(usize),
+    #[error("Failed to create logical device")]
     LogicalDeviceCreateError,
     // memory
+    #[error("Failed to find suitable memory type")]
     MemoryFailedToFindType,
     // validation
+    #[error("No available layers")]
     NoValidationLayers,
+    #[error("Failed to create physical device. No GPU with supported functions")]
     PhysicalDeviceNoGPU,
     // queues
+    #[error("Failed to create queue indices")]
     QueueCreationFailed,
+    #[error("Failed to find graphics queue")]
     QueueGraphicsNotFound,
+    #[error("Failed to find present queue")]
     QueuePresentNotFound,
     // Pipeline
+    #[error("Failed to create graphics pipeline")]
     PipelineCreateError,
     // validation
+    #[error("Not all required validation layers are supported")]
     RequiredValidationLayersUnsupported,
     // shaders
+    #[error("Failed to read shader: {0}")]
     ShaderFileReadFailure(String),
     // swap chain errors
+    #[error("Failed to choose a swap chain format")]
     SwapChainFormatsError,
+    #[error("Failed to choose a swap extent")]
     SwapExtentFailedToGetCurrentMonitor,
-    // general vulkan errors
-    VkError(String),
-    VulkanStringConversionError,
-    VulkanUsizeConversionError,
-}
-
-impl fmt::Display for VulkanError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            VulkanError::CommandBufferNotAvailable(index) => {
-                write!(f, "Failed to find command buffer with index: {}", index)
-            }
-            VulkanError::LogicalDeviceCreateError => write!(f, "Failed to create logical device"),
-            VulkanError::MemoryFailedToFindType => write!(f, "Failed to find suitable memory type"),
-            VulkanError::NoValidationLayers => write!(f, "No available layers"),
-            VulkanError::PhysicalDeviceNoGPU => write!(
-                f,
-                "Failed to create physical device. No GPU with supported functions"
-            ),
-            VulkanError::QueueCreationFailed => write!(f, "Failed to create queue indices"),
-            VulkanError::QueueGraphicsNotFound => write!(f, "Failed to find graphics queue"),
-            VulkanError::QueuePresentNotFound => write!(f, "Failed to find present queue"),
-            VulkanError::PipelineCreateError => write!(f, "Failed to create graphics pipeline"),
-            VulkanError::RequiredValidationLayersUnsupported => {
-                write!(f, "Not all required validation layers are supported")
-            }
-            VulkanError::ShaderFileReadFailure(error_string) => {
-                write!(f, "Failed to read shader: {}", error_string)
-            }
-            VulkanError::SwapChainFormatsError => write!(f, "Failed to choose a swap chain format"),
-            VulkanError::SwapExtentFailedToGetCurrentMonitor => {
-                write!(f, "Failed to choose a swap extent")
-            }
-            VulkanError::VkError(msg) => write!(f, "Error from vk::Result: {}", msg),
-            VulkanError::VulkanStringConversionError => {
-                write!(f, "Failed to convert vulkan string to string")
-            }
-            VulkanError::VulkanUsizeConversionError => write!(f, "Failed to convert usize"),
-        }
-    }
-}
-
-// implement automatic conversion from vk::Result to our Result
-// this will be called automatically when we use ?
-impl From<vk::Result> for VulkanError {
-    fn from(other: vk::Result) -> VulkanError {
-        let desc = other.to_string();
-        VulkanError::VkError(desc)
-    }
-}
-
-impl From<Utf8Error> for VulkanError {
-    fn from(_other: Utf8Error) -> VulkanError {
-        VulkanError::VulkanStringConversionError
-    }
-}
-
-impl From<TryFromIntError> for VulkanError {
-    fn from(_other: TryFromIntError) -> VulkanError {
-        VulkanError::VulkanUsizeConversionError
-    }
+    // uniform buffer errors
+    #[error("No uniform buffer for swap chain image with index {0}")]
+    UniformBufferNotAvailable(usize),
+    // fallback errors
+    #[error(transparent)]
+    OtherVkResult(#[from] vk::Result),
+    #[error(transparent)]
+    VulkanStringConversionError(#[from] Utf8Error),
+    #[error(transparent)]
+    VulkanUsizeConversionError(#[from] TryFromIntError),
 }

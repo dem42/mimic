@@ -7,6 +7,7 @@ pub mod devices;
 pub mod drawing;
 pub mod graphics_pipeline;
 pub mod presentation;
+pub mod uniforms;
 pub mod util;
 
 #[cfg(test)]

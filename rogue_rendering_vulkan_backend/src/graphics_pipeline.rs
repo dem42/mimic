@@ -30,6 +30,7 @@ impl GraphicsPipeline {
     pub fn create(
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
+        uniform_descriptors: &vk::DescriptorSetLayout,
     ) -> Result<Self> {
         let vert_shader = create_shader_module(
             Path::new("rogue_rendering_vulkan_backend/shaders/spv/simple_triangle.vert.spv"),
@@ -116,7 +117,10 @@ impl GraphicsPipeline {
             polygon_mode: vk::PolygonMode::FILL,
             line_width: 1.0f32,
             cull_mode: vk::CullModeFlags::BACK,
-            front_face: vk::FrontFace::CLOCKWISE,
+            // we are flipping things upside down with proj.m11 *= -1 so we want counter clockwise
+            // to give the direction that defines the front face
+            // we do this because normally we specify our meshes in clockwise but without the flip
+            front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             depth_bias_enable: vk::FALSE,
             ..Default::default()
         };
@@ -146,6 +150,8 @@ impl GraphicsPipeline {
         };
 
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
+            set_layout_count: 1,
+            p_set_layouts: uniform_descriptors,
             ..Default::default()
         };
 

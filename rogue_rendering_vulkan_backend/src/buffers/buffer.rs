@@ -12,7 +12,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    fn create(
+    pub fn create(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -68,7 +68,7 @@ impl Buffer {
         unsafe {
             // IMPORTANT: this only works with array slices due to the copy_non_overlapping
             // it does not work with data being a Vec
-            memory::fill_vertex_buffer(logical_device, staging_buffer.memory, data)?;
+            memory::fill_buffer(logical_device, staging_buffer.memory, data)?;
         }
 
         let result_buffer = Buffer::create(

@@ -1,5 +1,9 @@
+use nalgebra_glm as glm;
+
+use rogue_rendering_vulkan_backend::buffers::buffer::Buffer;
 use rogue_rendering_vulkan_backend::buffers::index_buffer::IndexBuffer;
 use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
+use rogue_rendering_vulkan_backend::buffers::memory;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
 use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
 use rogue_rendering_vulkan_backend::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
@@ -11,6 +15,8 @@ use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
 use rogue_rendering_vulkan_backend::presentation::swap_chain::{
     SwapChainContainer, SwapChainSupportDetails,
 };
+use rogue_rendering_vulkan_backend::uniforms;
+use rogue_rendering_vulkan_backend::uniforms::descriptors::DescriptorData;
 use rogue_rendering_vulkan_backend::util;
 use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
 use rogue_rendering_vulkan_backend::util::platform::SurfaceContainer;
@@ -18,6 +24,7 @@ use rogue_rendering_vulkan_backend::util::result::{Result, VulkanError};
 use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 
 use rustylog::{log, Log};
+use rustyutil::apptime::AppTime;
 
 use ash::prelude::VkResult;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
@@ -55,11 +62,14 @@ struct VulkanApp {
     queues: QueueMap,
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
+    uniform_descriptors: vk::DescriptorSetLayout,
     graphics_pipeline: GraphicsPipeline,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
+    descriptor_data: DescriptorData,
+    uniform_buffers: Vec<Buffer>,
     command_buffers: Vec<vk::CommandBuffer>,
     sync_container: SynchronizationContainer,
     buffer_resized: bool,
@@ -131,11 +141,16 @@ impl VulkanApp {
         )
         .expect("Failed to create index buffer");
 
+        let uniform_descriptors = uniforms::descriptors::create_descriptor_set_layout(&logical_device)
+            .expect("Failed to create uniform descriptor set layout");
+
         let (
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
             framebuffers,
+            uniform_buffers,
+            descriptor_data,
             command_buffers,
         ) = Self::create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
             &instance,
@@ -146,6 +161,7 @@ impl VulkanApp {
             &command_pool,
             &vertex_buffer,
             &index_buffer,
+            &uniform_descriptors,
             &window,
         );
 
@@ -161,11 +177,14 @@ impl VulkanApp {
             queues,
             swap_chain_container,
             image_views_container,
+            uniform_descriptors,
             graphics_pipeline,
             framebuffers,
             command_pool,
             vertex_buffer,
             index_buffer,
+            uniform_buffers,
+            descriptor_data,
             command_buffers,
             sync_container,
             buffer_resized: false,
@@ -184,47 +203,68 @@ impl VulkanApp {
         command_pool: &vk::CommandPool,
         vertex_buffer: &VertexBuffer,
         index_buffer: &IndexBuffer,
+        uniform_descriptors: &vk::DescriptorSetLayout,
         window: &Window,
     ) -> (
         SwapChainContainer,
         ImageViews,
         GraphicsPipeline,
         Vec<vk::Framebuffer>,
+        Vec<Buffer>,
+        DescriptorData,
         Vec<vk::CommandBuffer>,
     ) {
         let swap_chain_container = SwapChainContainer::create(
-            &instance,
+            instance,
             physical_device,
-            &logical_device,
-            &surface_container,
-            &window,
-            &queue_indices,
+            logical_device,
+            surface_container,
+            window,
+            queue_indices,
         )
         .expect("Failed to create swap chain");
 
-        let image_views_container = ImageViews::create(&logical_device, &swap_chain_container)
+        let image_views_container = ImageViews::create(logical_device, &swap_chain_container)
             .expect("Failed to create image views");
 
-        let graphics_pipeline = GraphicsPipeline::create(&logical_device, &swap_chain_container)
-            .expect("Failed to create graphics pipeline");
+        let graphics_pipeline =
+            GraphicsPipeline::create(logical_device, &swap_chain_container, uniform_descriptors)
+                .expect("Failed to create graphics pipeline");
 
         let framebuffers = framebuffers::create_framebuffers(
-            &logical_device,
+            logical_device,
             &graphics_pipeline,
             &image_views_container,
             &swap_chain_container,
         )
         .expect("Failed to create framebuffers");
 
+        let uniform_buffers = uniforms::buffers::create_uniform_buffers(
+            instance,
+            physical_device,
+            logical_device,
+            &swap_chain_container,
+        )
+        .expect("Failed to create uniform buffers");
+
+        let descriptor_data = DescriptorData::create(
+            logical_device, 
+            &swap_chain_container, 
+            *uniform_descriptors, 
+            &uniform_buffers
+        )
+        .expect("Failed to create descriptor data");
+
         // command buffers are released when we destroy the pool
         let command_buffers = command_buffers::create_command_buffers(
-            &logical_device,
-            &command_pool,
+            logical_device,
+            command_pool,
             &framebuffers,
             &graphics_pipeline,
             &swap_chain_container,
             vertex_buffer,
             index_buffer,
+            &descriptor_data,
         )
         .expect("Failed to create command buffers");
 
@@ -233,6 +273,8 @@ impl VulkanApp {
             image_views_container,
             graphics_pipeline,
             framebuffers,
+            uniform_buffers,
+            descriptor_data,
             command_buffers,
         )
     }
@@ -248,6 +290,8 @@ impl VulkanApp {
             image_views_container,
             graphics_pipeline,
             framebuffers,
+            uniform_buffers,
+            descriptor_data,
             command_buffers,
         ) = Self::create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
             &self.instance,
@@ -258,6 +302,7 @@ impl VulkanApp {
             &self.command_pool,
             &self.vertex_buffer,
             &self.index_buffer,
+            &self.uniform_descriptors,
             window,
         );
 
@@ -265,6 +310,8 @@ impl VulkanApp {
         self.image_views_container = image_views_container;
         self.graphics_pipeline = graphics_pipeline;
         self.framebuffers = framebuffers;
+        self.uniform_buffers = uniform_buffers;
+        self.descriptor_data = descriptor_data;
         self.command_buffers = command_buffers;
 
         Ok(())
@@ -279,12 +326,12 @@ impl VulkanApp {
         let resize_needed = match location {
             ResizeDetectedLocation::InAcquire => match result {
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => true,
-                Err(error) => return Err(VulkanError::VkError(error.to_string())),
+                Err(error) => return Err(VulkanError::from(*error)),
                 Ok(_) => false,
             },
             ResizeDetectedLocation::InPresent => match result {
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => true,
-                Err(error) => return Err(VulkanError::VkError(error.to_string())),
+                Err(error) => return Err(VulkanError::from(*error)),
                 // if a window event signaled that a resize happened then we want to handle the resize after image present
                 Ok(_) => self.buffer_resized,
             },
@@ -299,7 +346,7 @@ impl VulkanApp {
         Ok(resize_happened)
     }
 
-    fn draw_frame(&mut self, window: &Window) -> Result<()> {
+    fn draw_frame(&mut self, window: &Window, apptime: &AppTime) -> Result<()> {
         if self.buffer_minimized {
             return Ok(());
         }
@@ -347,6 +394,9 @@ impl VulkanApp {
             available_image_index,
             self.sync_container.get_in_flight_fence(),
         );
+
+        // after image is acquired from swap chain we can update the uniform buffer for that swap chain
+        self.update_uniform_buffer(available_image_index, apptime)?;
 
         // specify that we want to delay the execution of the submit of the command buffer
         // specificially, we want to wait until the wiriting to the color attachment is done on the available image
@@ -417,6 +467,37 @@ impl VulkanApp {
         Ok(())
     }
 
+    fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
+        
+        let angle_rad = apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
+        let model = glm::rotate(&glm::Mat4::identity(), angle_rad, &glm::Vec3::new(0., 0., 1.));
+
+        let view = glm::look_at(&glm::Vec3::new(2., 2., 2.), &glm::Vec3::new(0., 0., 0.), &glm::Vec3::new(0., 0., 1.));
+
+        let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32 / self.swap_chain_container.swap_chain_extent.height as f32;
+        let mut proj = glm::perspective(aspect_ratio, 45.0, 0.1, 10.0);
+
+        // flip upside down because the perspective is the opengl computation
+        proj.m11 *= -1.0;
+
+        let ubos = [uniforms::buffers::UniformBufferObject {
+            foo: uniforms::buffers::Foo {foo: glm::Vec2::new(0., 0.)},
+            model,
+            view,
+            proj,
+        }];
+
+        if image_index >= self.uniform_buffers.len() {
+            return Err(VulkanError::UniformBufferNotAvailable(image_index));
+        }
+
+        unsafe {
+            memory::fill_buffer(&self.logical_device, self.uniform_buffers[image_index].memory, &ubos)?;
+        }
+        
+        Ok(())
+    }
+
     fn wait_until_device_idle(&self) -> Result<()> {
         unsafe {
             self.logical_device.device_wait_idle()?;
@@ -476,6 +557,14 @@ impl VulkanApp {
             self.logical_device.destroy_framebuffer(*framebuffer, None);
         }
 
+        // the descriptor sets are cleared automatically when the pool is cleared
+        self.logical_device.destroy_descriptor_pool(self.descriptor_data.descriptor_pool, None);
+
+        for uniform_buffer in self.uniform_buffers.iter() {
+            self.logical_device.destroy_buffer(uniform_buffer.buffer, None);
+            self.logical_device.free_memory(uniform_buffer.memory, None);
+        }
+
         self.logical_device
             .free_command_buffers(self.command_pool, &self.command_buffers);
 
@@ -501,6 +590,9 @@ impl Drop for VulkanApp {
         log!(Log::Info, "VulkanApp exiting");
         unsafe {
             self.cleanup_swap_chain();
+
+            self.logical_device
+                .destroy_descriptor_set_layout(self.uniform_descriptors, None);
 
             self.logical_device
                 .destroy_buffer(self.index_buffer.data.buffer, None);
@@ -529,7 +621,7 @@ impl Drop for VulkanApp {
 struct Main;
 
 impl Main {
-    fn main_loop(mut vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window) {
+    fn main_loop(mut vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window, mut apptime: AppTime) {
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
@@ -563,7 +655,12 @@ impl Main {
                 window.request_redraw();
             }
             Event::RedrawRequested(_window_id) => {
-                let frame_result = vulkan_app.draw_frame(&window);
+                let time_update_result = apptime.update();
+                if let Err(error) = time_update_result {
+                    log!(Log::Error, "Failed to update app time: {}", error);
+                }
+
+                let frame_result = vulkan_app.draw_frame(&window, &apptime);
                 if let Err(error) = frame_result {
                     log!(Log::Error, "Failed to draw frame: {}", error);
                 }
@@ -595,5 +692,6 @@ fn main() {
 
     let vulkan_app = VulkanApp::new(&window);
 
-    Main::main_loop(vulkan_app, event_loop, window);
+    let apptime = AppTime::new();    
+    Main::main_loop(vulkan_app, event_loop, window, apptime);
 }

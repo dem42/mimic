@@ -98,7 +98,7 @@ pub fn create_device_memory(
     Ok(device_memory)
 }
 
-pub unsafe fn fill_vertex_buffer<T>(
+pub unsafe fn fill_buffer<T>(
     logical_device: &ash::Device,
     vertex_buffer_memory: vk::DeviceMemory,
     data: &[T],

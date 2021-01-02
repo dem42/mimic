@@ -2,5 +2,6 @@
 members = [
     "rustyrogue",
     "rustylog",
+    "rustyutil",
     "rogue_rendering_vulkan_backend",
 ]
