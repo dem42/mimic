@@ -9,7 +9,7 @@ pub struct ImageViews {
 }
 
 impl ImageViews {
-    pub fn create(
+    pub fn new(
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
     ) -> Result<Self> {

@@ -74,15 +74,15 @@ pub fn create_device_memory(
     vertex_buffer: vk::Buffer,
     memory_property_requirements: vk::MemoryPropertyFlags,
 ) -> Result<vk::DeviceMemory> {
-    let mem_properties = unsafe { instance.get_physical_device_memory_properties(physical_device) };
-
+    
     let memory_size_type_requirements =
         unsafe { logical_device.get_buffer_memory_requirements(vertex_buffer) };
 
     let memory_type_index = find_memory_type(
+        instance,
+        physical_device,
         memory_size_type_requirements.memory_type_bits,
         memory_property_requirements,
-        mem_properties,
     )?;
 
     let memory_allocate_info = vk::MemoryAllocateInfo {
@@ -123,11 +123,14 @@ where
     Ok(())
 }
 
-fn find_memory_type(
+pub fn find_memory_type(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
     type_filter_bitfield: u32,
     required_properties: vk::MemoryPropertyFlags,
-    mem_properties: vk::PhysicalDeviceMemoryProperties,
 ) -> Result<u32> {
+    let mem_properties = unsafe { instance.get_physical_device_memory_properties(physical_device) };
+
     for (i, mem_type) in mem_properties.memory_types.iter().enumerate() {
         if type_filter_bitfield & (1 << i) != 0
             && mem_type.property_flags.contains(required_properties)

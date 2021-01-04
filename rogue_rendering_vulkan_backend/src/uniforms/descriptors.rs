@@ -38,15 +38,20 @@ pub struct DescriptorData {
 }
 
 impl DescriptorData {
-
-    pub fn create(
+    pub fn new(
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
         descriptor_layout: vk::DescriptorSetLayout,
         uniform_buffers: &Vec<Buffer>,
     ) -> Result<Self> {
         let descriptor_pool = Self::create_descriptor_pool(logical_device, swap_chain_container)?;
-        let descriptor_sets = Self::create_descriptor_sets(logical_device, swap_chain_container, descriptor_pool, descriptor_layout, uniform_buffers)?;
+        let descriptor_sets = Self::create_descriptor_sets(
+            logical_device,
+            swap_chain_container,
+            descriptor_pool,
+            descriptor_layout,
+            uniform_buffers,
+        )?;
 
         Ok(Self {
             descriptor_pool,
@@ -65,7 +70,7 @@ impl DescriptorData {
             descriptor_count: swap_chain_img_cnt,
             ..Default::default()
         };
-        
+
         let create_info = vk::DescriptorPoolCreateInfo {
             pool_size_count: 1,
             p_pool_sizes: &descriptor_pool_size,
@@ -73,9 +78,7 @@ impl DescriptorData {
             ..Default::default()
         };
 
-        let descriptor_pool = unsafe {
-            logical_device.create_descriptor_pool(&create_info, None)?
-        };
+        let descriptor_pool = unsafe { logical_device.create_descriptor_pool(&create_info, None)? };
 
         Ok(descriptor_pool)
     }
@@ -87,7 +90,6 @@ impl DescriptorData {
         descriptor_layout: vk::DescriptorSetLayout,
         uniform_buffers: &Vec<Buffer>,
     ) -> Result<Vec<vk::DescriptorSet>> {
-
         let layouts = vec![descriptor_layout; swap_chain_container.swap_chain_images.len()];
 
         let descriptor_alloc_info = vk::DescriptorSetAllocateInfo {
@@ -97,12 +99,13 @@ impl DescriptorData {
             ..Default::default()
         };
 
-        let descriptor_sets = unsafe {
-            logical_device.allocate_descriptor_sets(&descriptor_alloc_info)?
-        };
+        let descriptor_sets =
+            unsafe { logical_device.allocate_descriptor_sets(&descriptor_alloc_info)? };
 
         if uniform_buffers.len() < swap_chain_container.swap_chain_images.len() {
-            return Err(VulkanError::UniformBufferNotAvailable(uniform_buffers.len()));
+            return Err(VulkanError::UniformBufferNotAvailable(
+                uniform_buffers.len(),
+            ));
         }
 
         for buf_idx in 0..swap_chain_container.swap_chain_images.len() {
@@ -126,7 +129,7 @@ impl DescriptorData {
                 p_buffer_info: &descriptor_buffer_info,
                 p_image_info: ptr::null(),
                 p_texel_buffer_view: ptr::null(),
-                ..Default::default()            
+                ..Default::default()
             }];
 
             unsafe {

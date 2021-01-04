@@ -22,7 +22,7 @@ pub struct IndexBuffer {
 }
 
 impl IndexBuffer {
-    pub fn create(
+    pub fn new(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,

@@ -102,14 +102,14 @@ pub fn create_command_buffers(
             if i >= descriptor_data.descriptor_sets.len() {
                 return Err(VulkanError::DescriptorSetNotAvailable(i));
             }
-            let descriptors_sets_to_bind = [descriptor_data.descriptor_sets[i]];          
+            let descriptors_sets_to_bind = [descriptor_data.descriptor_sets[i]];
             logical_device.cmd_bind_descriptor_sets(
-                command_buffers[i], 
-                vk::PipelineBindPoint::GRAPHICS, 
-                graphics_pipeline.pipeline_layout, 
-                0, 
-                &descriptors_sets_to_bind, 
-                &[]
+                command_buffers[i],
+                vk::PipelineBindPoint::GRAPHICS,
+                graphics_pipeline.pipeline_layout,
+                0,
+                &descriptors_sets_to_bind,
+                &[],
             );
 
             // let vertex_count = u32::try_from(vertex_buffer.vertex_count)?;

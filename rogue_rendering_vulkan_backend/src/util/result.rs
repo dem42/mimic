@@ -1,4 +1,5 @@
 use ash::vk;
+use image::ImageError;
 use std::num::TryFromIntError;
 use std::str::Utf8Error;
 
@@ -6,7 +7,7 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, VulkanError>;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum VulkanError {
     #[error("Failed to find command buffer with index: {0}")]
     CommandBufferNotAvailable(usize),
@@ -48,6 +49,8 @@ pub enum VulkanError {
     #[error("No uniform buffer for swap chain image with index {0}")]
     UniformBufferNotAvailable(usize),
     // fallback errors
+    #[error(transparent)]
+    ImageError(#[from] ImageError),
     #[error(transparent)]
     OtherVkResult(#[from] vk::Result),
     #[error(transparent)]

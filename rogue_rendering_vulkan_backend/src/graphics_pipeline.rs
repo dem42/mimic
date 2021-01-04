@@ -27,7 +27,7 @@ impl GraphicsPipeline {
         },
     }];
 
-    pub fn create(
+    pub fn new(
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
         uniform_descriptors: &vk::DescriptorSetLayout,

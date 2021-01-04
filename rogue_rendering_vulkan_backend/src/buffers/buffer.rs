@@ -12,7 +12,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn create(
+    pub fn new(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -56,7 +56,7 @@ impl Buffer {
     where
         [T]: memory::MemoryCopyable,
     {
-        let staging_buffer = Buffer::create(
+        let staging_buffer = Buffer::new(
             instance,
             physical_device,
             logical_device,
@@ -71,7 +71,7 @@ impl Buffer {
             memory::fill_buffer(logical_device, staging_buffer.memory, data)?;
         }
 
-        let result_buffer = Buffer::create(
+        let result_buffer = Buffer::new(
             instance,
             physical_device,
             logical_device,

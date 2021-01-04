@@ -2,8 +2,8 @@ use nalgebra_glm as glm;
 
 use rogue_rendering_vulkan_backend::buffers::buffer::Buffer;
 use rogue_rendering_vulkan_backend::buffers::index_buffer::IndexBuffer;
-use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
 use rogue_rendering_vulkan_backend::buffers::memory;
+use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
 use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
 use rogue_rendering_vulkan_backend::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
@@ -120,10 +120,9 @@ impl VulkanApp {
         let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)
             .expect("Failed to create command pool");
 
-        let queues =
-            QueueMap::create(&queue_indices, &logical_device).expect("Failed to get queues");
+        let queues = QueueMap::new(&queue_indices, &logical_device).expect("Failed to get queues");
 
-        let vertex_buffer = VertexBuffer::create(
+        let vertex_buffer = VertexBuffer::new(
             &instance,
             physical_device,
             &logical_device,
@@ -132,7 +131,7 @@ impl VulkanApp {
         )
         .expect("Failed to create vertex buffer");
 
-        let index_buffer = IndexBuffer::create(
+        let index_buffer = IndexBuffer::new(
             &instance,
             physical_device,
             &logical_device,
@@ -141,8 +140,9 @@ impl VulkanApp {
         )
         .expect("Failed to create index buffer");
 
-        let uniform_descriptors = uniforms::descriptors::create_descriptor_set_layout(&logical_device)
-            .expect("Failed to create uniform descriptor set layout");
+        let uniform_descriptors =
+            uniforms::descriptors::create_descriptor_set_layout(&logical_device)
+                .expect("Failed to create uniform descriptor set layout");
 
         let (
             swap_chain_container,
@@ -214,7 +214,7 @@ impl VulkanApp {
         DescriptorData,
         Vec<vk::CommandBuffer>,
     ) {
-        let swap_chain_container = SwapChainContainer::create(
+        let swap_chain_container = SwapChainContainer::new(
             instance,
             physical_device,
             logical_device,
@@ -224,11 +224,11 @@ impl VulkanApp {
         )
         .expect("Failed to create swap chain");
 
-        let image_views_container = ImageViews::create(logical_device, &swap_chain_container)
+        let image_views_container = ImageViews::new(logical_device, &swap_chain_container)
             .expect("Failed to create image views");
 
         let graphics_pipeline =
-            GraphicsPipeline::create(logical_device, &swap_chain_container, uniform_descriptors)
+            GraphicsPipeline::new(logical_device, &swap_chain_container, uniform_descriptors)
                 .expect("Failed to create graphics pipeline");
 
         let framebuffers = framebuffers::create_framebuffers(
@@ -247,11 +247,11 @@ impl VulkanApp {
         )
         .expect("Failed to create uniform buffers");
 
-        let descriptor_data = DescriptorData::create(
-            logical_device, 
-            &swap_chain_container, 
-            *uniform_descriptors, 
-            &uniform_buffers
+        let descriptor_data = DescriptorData::new(
+            logical_device,
+            &swap_chain_container,
+            *uniform_descriptors,
+            &uniform_buffers,
         )
         .expect("Failed to create descriptor data");
 
@@ -468,20 +468,30 @@ impl VulkanApp {
     }
 
     fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
-        
         let angle_rad = apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
-        let model = glm::rotate(&glm::Mat4::identity(), angle_rad, &glm::Vec3::new(0., 0., 1.));
+        let model = glm::rotate(
+            &glm::Mat4::identity(),
+            angle_rad,
+            &glm::Vec3::new(0., 0., 1.),
+        );
 
-        let view = glm::look_at(&glm::Vec3::new(2., 2., 2.), &glm::Vec3::new(0., 0., 0.), &glm::Vec3::new(0., 0., 1.));
+        let view = glm::look_at(
+            &glm::Vec3::new(2., 2., 2.),
+            &glm::Vec3::new(0., 0., 0.),
+            &glm::Vec3::new(0., 0., 1.),
+        );
 
-        let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32 / self.swap_chain_container.swap_chain_extent.height as f32;
+        let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32
+            / self.swap_chain_container.swap_chain_extent.height as f32;
         let mut proj = glm::perspective(aspect_ratio, 45.0, 0.1, 10.0);
 
         // flip upside down because the perspective is the opengl computation
         proj.m11 *= -1.0;
 
         let ubos = [uniforms::buffers::UniformBufferObject {
-            foo: uniforms::buffers::Foo {foo: glm::Vec2::new(0., 0.)},
+            foo: uniforms::buffers::Foo {
+                foo: glm::Vec2::new(0., 0.),
+            },
             model,
             view,
             proj,
@@ -492,9 +502,13 @@ impl VulkanApp {
         }
 
         unsafe {
-            memory::fill_buffer(&self.logical_device, self.uniform_buffers[image_index].memory, &ubos)?;
+            memory::fill_buffer(
+                &self.logical_device,
+                self.uniform_buffers[image_index].memory,
+                &ubos,
+            )?;
         }
-        
+
         Ok(())
     }
 
@@ -558,10 +572,12 @@ impl VulkanApp {
         }
 
         // the descriptor sets are cleared automatically when the pool is cleared
-        self.logical_device.destroy_descriptor_pool(self.descriptor_data.descriptor_pool, None);
+        self.logical_device
+            .destroy_descriptor_pool(self.descriptor_data.descriptor_pool, None);
 
         for uniform_buffer in self.uniform_buffers.iter() {
-            self.logical_device.destroy_buffer(uniform_buffer.buffer, None);
+            self.logical_device
+                .destroy_buffer(uniform_buffer.buffer, None);
             self.logical_device.free_memory(uniform_buffer.memory, None);
         }
 
@@ -621,7 +637,12 @@ impl Drop for VulkanApp {
 struct Main;
 
 impl Main {
-    fn main_loop(mut vulkan_app: VulkanApp, event_loop: EventLoop<()>, window: Window, mut apptime: AppTime) {
+    fn main_loop(
+        mut vulkan_app: VulkanApp,
+        event_loop: EventLoop<()>,
+        window: Window,
+        mut apptime: AppTime,
+    ) {
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
@@ -692,6 +713,6 @@ fn main() {
 
     let vulkan_app = VulkanApp::new(&window);
 
-    let apptime = AppTime::new();    
+    let apptime = AppTime::new();
     Main::main_loop(vulkan_app, event_loop, window, apptime);
 }

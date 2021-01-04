@@ -12,7 +12,7 @@ pub struct Foo {
 }
 
 // vulkan has very precise memory layout requirements
-// specifically mat4 needs to be 16 byte aligned 
+// specifically mat4 needs to be 16 byte aligned
 // but since vec2 is only 8 bytes our model mat is not properly aligned unless we force alignment
 #[repr(C, align(16))]
 pub struct UniformBufferObject {
@@ -40,7 +40,7 @@ pub fn create_uniform_buffers(
     let mut uniform_buffers = Vec::new();
 
     for _i in 0..swap_chain_container.swap_chain_images.len() {
-        let new_uniform_buf = Buffer::create(
+        let new_uniform_buf = Buffer::new(
             instance,
             physical_device,
             logical_device,

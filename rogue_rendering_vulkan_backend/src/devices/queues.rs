@@ -19,10 +19,7 @@ pub struct QueueMap {
 }
 
 impl QueueMap {
-    pub fn create(
-        queue_indices: &QueueFamilyIndices,
-        logical_device: &ash::Device,
-    ) -> Result<Self> {
+    pub fn new(queue_indices: &QueueFamilyIndices, logical_device: &ash::Device) -> Result<Self> {
         let mut queue_map = HashMap::new();
         for (&queue_type, &queue_family_index) in queue_indices.queue_index_map.iter() {
             let QueueFamilyCreateData(queue_family_index, _, _) =
