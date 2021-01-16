@@ -14,6 +14,8 @@ pub enum VulkanError {
     // descriptors
     #[error("Incorrect number of descriptors sets: {0}")]
     DescriptorSetNotAvailable(usize),
+    #[error("Image layout transition not supported: {0}")]
+    ImageLayoutTransitionNotSupported(String),
     #[error("Failed to create logical device")]
     LogicalDeviceCreateError,
     // memory

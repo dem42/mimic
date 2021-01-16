@@ -6,6 +6,7 @@ use crate::util::result::Result;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
+#[derive(Default)]
 pub struct Buffer {
     pub buffer: vk::Buffer,
     pub memory: vk::DeviceMemory,

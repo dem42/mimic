@@ -1,6 +1,6 @@
 use crate::buffers::index_buffer::IndexBuffer;
 use crate::buffers::vertex_buffer::VertexBuffer;
-use crate::devices::queues::{QueueFamilyIndices, QueueType};
+use crate::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
 use crate::graphics_pipeline::GraphicsPipeline;
 use crate::presentation::swap_chain::SwapChainContainer;
 use crate::uniforms::descriptors::DescriptorData;
@@ -25,6 +25,65 @@ pub fn create_command_pool(
     let command_pool = unsafe { logical_device.create_command_pool(&pool_info, None)? };
 
     Ok(command_pool)
+}
+
+pub fn begin_single_time_commands(
+    logical_device: &ash::Device,
+    command_pool: vk::CommandPool,
+) -> Result<vk::CommandBuffer> {
+    let cb_alloc_info = vk::CommandBufferAllocateInfo {
+        level: vk::CommandBufferLevel::PRIMARY,
+        command_pool,
+        command_buffer_count: 1,
+        ..Default::default()
+    };
+
+    let command_buffer = unsafe { logical_device.allocate_command_buffers(&cb_alloc_info)? };
+
+    if command_buffer.is_empty() {
+        // we need to have one command buffer for the copy operation
+        return Err(VulkanError::CommandBufferNotAvailable(0));
+    }
+    let command_buffer = command_buffer[0];
+
+    // start recording command buffer immediatetly
+    let cb_begin_info = vk::CommandBufferBeginInfo {
+        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+        ..Default::default()
+    };
+
+    unsafe {
+        logical_device.begin_command_buffer(command_buffer, &cb_begin_info)?;
+    }
+
+    Ok(command_buffer)
+}
+
+pub fn end_single_time_commands(
+    command_buffer: vk::CommandBuffer,
+    logical_device: &ash::Device,
+    queues: &QueueMap,
+    command_pool: vk::CommandPool,
+) -> Result<()> {
+    unsafe {
+        logical_device.end_command_buffer(command_buffer)?;
+    }
+
+    let submit_info = [vk::SubmitInfo {
+        command_buffer_count: 1,
+        p_command_buffers: &command_buffer,
+        ..Default::default()
+    }];
+
+    let command_buffer_array = [command_buffer];
+    let graphics_queue = queues.get_graphics_queue()?;
+    unsafe {
+        logical_device.queue_submit(graphics_queue, &submit_info, vk::Fence::null())?;
+        logical_device.queue_wait_idle(graphics_queue)?;
+        logical_device.free_command_buffers(command_pool, &command_buffer_array);
+    }
+
+    Ok(())
 }
 
 pub fn create_command_buffers(

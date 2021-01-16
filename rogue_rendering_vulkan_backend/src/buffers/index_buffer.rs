@@ -4,6 +4,7 @@ use crate::buffers::memory::MemoryCopyable;
 use crate::devices::queues::QueueMap;
 use crate::util::result::Result;
 
+use ash::version::DeviceV1_0;
 use ash::vk;
 use std::convert::TryFrom;
 
@@ -16,6 +17,7 @@ impl MemoryCopyable for [IndexType] {
     }
 }
 
+#[derive(Default)]
 pub struct IndexBuffer {
     pub data: Buffer,
     pub index_count: usize,
@@ -47,6 +49,11 @@ impl IndexBuffer {
             data: index_buffer,
             index_count: indices.len(),
         })
+    }
+
+    pub unsafe fn drop(self, logical_device: &ash::Device) {
+        logical_device.destroy_buffer(self.data.buffer, None);
+        logical_device.free_memory(self.data.memory, None);
     }
 
     fn get_rectangle_indices() -> [IndexType; 6] {

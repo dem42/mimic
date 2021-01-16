@@ -15,6 +15,7 @@ use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
 use rogue_rendering_vulkan_backend::presentation::swap_chain::{
     SwapChainContainer, SwapChainSupportDetails,
 };
+use rogue_rendering_vulkan_backend::textures::images::TextureImage;
 use rogue_rendering_vulkan_backend::uniforms;
 use rogue_rendering_vulkan_backend::uniforms::descriptors::DescriptorData;
 use rogue_rendering_vulkan_backend::util;
@@ -72,6 +73,7 @@ struct VulkanApp {
     uniform_buffers: Vec<Buffer>,
     command_buffers: Vec<vk::CommandBuffer>,
     sync_container: SynchronizationContainer,
+    texture_image: TextureImage,
     buffer_resized: bool,
     buffer_minimized: bool,
 }
@@ -121,6 +123,16 @@ impl VulkanApp {
             .expect("Failed to create command pool");
 
         let queues = QueueMap::new(&queue_indices, &logical_device).expect("Failed to get queues");
+
+        let texture_image = TextureImage::new(
+            "rogue_rendering_vulkan_backend/textures/texture.jpg",
+            &instance,
+            physical_device,
+            &logical_device,
+            command_pool,
+            &queues,
+        )
+        .expect("Failed to create texture image");
 
         let vertex_buffer = VertexBuffer::new(
             &instance,
@@ -187,6 +199,7 @@ impl VulkanApp {
             descriptor_data,
             command_buffers,
             sync_container,
+            texture_image,
             buffer_resized: false,
             buffer_minimized: false,
         };
@@ -607,18 +620,13 @@ impl Drop for VulkanApp {
         unsafe {
             self.cleanup_swap_chain();
 
+            std::mem::take(&mut self.texture_image).drop(&self.logical_device);
+
             self.logical_device
                 .destroy_descriptor_set_layout(self.uniform_descriptors, None);
 
-            self.logical_device
-                .destroy_buffer(self.index_buffer.data.buffer, None);
-            self.logical_device
-                .free_memory(self.index_buffer.data.memory, None);
-
-            self.logical_device
-                .destroy_buffer(self.vertex_buffer.data.buffer, None);
-            self.logical_device
-                .free_memory(self.vertex_buffer.data.memory, None);
+            std::mem::take(&mut self.index_buffer).drop(&self.logical_device);
+            std::mem::take(&mut self.vertex_buffer).drop(&self.logical_device);
 
             self.sync_container.destroy(&self.logical_device);
             self.logical_device

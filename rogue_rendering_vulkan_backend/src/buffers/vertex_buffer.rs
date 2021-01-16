@@ -5,9 +5,11 @@ use crate::util::result::Result;
 
 use crate::buffers::vertex::Vertex;
 
+use ash::version::DeviceV1_0;
 use ash::vk;
 use std::convert::TryFrom;
 
+#[derive(Default)]
 pub struct VertexBuffer {
     pub data: Buffer,
     pub vertex_count: usize,
@@ -41,21 +43,9 @@ impl VertexBuffer {
         })
     }
 
-    fn get_simple_triangle() -> [Vertex; 3] {
-        [
-            Vertex {
-                pos: glm::vec2(0.0, -0.5),
-                color: glm::vec3(1.0, 1.0, 1.0),
-            },
-            Vertex {
-                pos: glm::vec2(0.5, 0.5),
-                color: glm::vec3(0.0, 1.0, 0.0),
-            },
-            Vertex {
-                pos: glm::vec2(-0.5, 0.5),
-                color: glm::vec3(0.0, 0.0, 1.0),
-            },
-        ]
+    pub unsafe fn drop(self, logical_device: &ash::Device) {
+        logical_device.destroy_buffer(self.data.buffer, None);
+        logical_device.free_memory(self.data.memory, None);
     }
 
     fn get_rectangle() -> [Vertex; 4] {

@@ -1,4 +1,5 @@
 use crate::devices::queues::QueueMap;
+use crate::drawing::command_buffers::{begin_single_time_commands, end_single_time_commands};
 use crate::util::result::{Result, VulkanError};
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
@@ -17,29 +18,7 @@ pub fn copy_buffer(
     command_pool: vk::CommandPool,
     queues: &QueueMap,
 ) -> Result<()> {
-    let cb_alloc_info = vk::CommandBufferAllocateInfo {
-        level: vk::CommandBufferLevel::PRIMARY,
-        command_pool,
-        command_buffer_count: 1,
-        ..Default::default()
-    };
-
-    let command_buffer = unsafe { logical_device.allocate_command_buffers(&cb_alloc_info)? };
-
-    if command_buffer.is_empty() {
-        // we need to have one command buffer for the copy operation
-        return Err(VulkanError::CommandBufferNotAvailable(0));
-    }
-
-    // start recording command buffer immediatetly
-    let cb_begin_info = vk::CommandBufferBeginInfo {
-        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-        ..Default::default()
-    };
-
-    unsafe {
-        logical_device.begin_command_buffer(command_buffer[0], &cb_begin_info)?;
-    }
+    let command_buffer = begin_single_time_commands(logical_device, command_pool)?;
 
     let copy_regions = [vk::BufferCopy {
         size,
@@ -47,22 +26,10 @@ pub fn copy_buffer(
     }];
 
     unsafe {
-        logical_device.cmd_copy_buffer(command_buffer[0], src_buffer, dst_buffer, &copy_regions);
-        logical_device.end_command_buffer(command_buffer[0])?;
+        logical_device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &copy_regions);
     }
 
-    let submit_info = [vk::SubmitInfo {
-        command_buffer_count: 1,
-        p_command_buffers: command_buffer.as_ptr(),
-        ..Default::default()
-    }];
-
-    let graphics_queue = queues.get_graphics_queue()?;
-    unsafe {
-        logical_device.queue_submit(graphics_queue, &submit_info, vk::Fence::null())?;
-        logical_device.queue_wait_idle(graphics_queue)?;
-        logical_device.free_command_buffers(command_pool, &command_buffer);
-    }
+    end_single_time_commands(command_buffer, logical_device, queues, command_pool)?;
 
     Ok(())
 }
@@ -74,7 +41,6 @@ pub fn create_device_memory(
     vertex_buffer: vk::Buffer,
     memory_property_requirements: vk::MemoryPropertyFlags,
 ) -> Result<vk::DeviceMemory> {
-    
     let memory_size_type_requirements =
         unsafe { logical_device.get_buffer_memory_requirements(vertex_buffer) };
 
