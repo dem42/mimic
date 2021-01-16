@@ -1,6 +1,7 @@
 use crate::devices::queues::QueueType;
 use crate::presentation::swap_chain::SwapChainSupportDetails;
 
+use ash::vk;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::ffi::CString;
@@ -10,6 +11,7 @@ pub struct DeviceRequirements {
     pub required_queues: HashSet<QueueType>,
     pub required_device_extensions: Vec<&'static str>,
     pub is_swap_chain_adequate_check: fn(&SwapChainSupportDetails) -> bool,
+    pub supported_features_check: fn(&vk::PhysicalDeviceFeatures) -> bool,
 }
 
 impl DeviceRequirements {
@@ -17,11 +19,13 @@ impl DeviceRequirements {
         required_queues: &[QueueType],
         required_device_extensions: &[&'static str],
         is_swap_chain_adequate_check: fn(&SwapChainSupportDetails) -> bool,
+        supported_features_check: fn(&vk::PhysicalDeviceFeatures) -> bool,
     ) -> Self {
         Self {
             required_queues: required_queues.iter().copied().collect(),
             required_device_extensions: required_device_extensions.iter().copied().collect(),
             is_swap_chain_adequate_check,
+            supported_features_check,
         }
     }
 

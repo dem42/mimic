@@ -5,7 +5,9 @@ use rogue_rendering_vulkan_backend::buffers::index_buffer::IndexBuffer;
 use rogue_rendering_vulkan_backend::buffers::memory;
 use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
 use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
-use rogue_rendering_vulkan_backend::devices::physical_device::pick_physical_device;
+use rogue_rendering_vulkan_backend::devices::physical_device::{
+    get_physical_device_properties, pick_physical_device,
+};
 use rogue_rendering_vulkan_backend::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
 use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
 use rogue_rendering_vulkan_backend::drawing::synchronization::SynchronizationContainer;
@@ -49,6 +51,10 @@ const DEVICE_EXTENSIONS: [&'static str; 1] = ["VK_KHR_swapchain"];
 
 fn is_swap_chain_adequate(swap_chain_details: &SwapChainSupportDetails) -> bool {
     !swap_chain_details.formats.is_empty() && !swap_chain_details.present_modes.is_empty()
+}
+
+fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFeatures) -> bool {
+    physical_device_featrues.sampler_anisotropy == vk::TRUE
 }
 
 struct VulkanApp {
@@ -96,9 +102,11 @@ impl VulkanApp {
             .expect("Failed to create surface");
         // pick the first graphics card that supports all the features we specified in instance
         let requirements =
-            DeviceRequirements::new(&REQUIRED_QUEUES, &DEVICE_EXTENSIONS, is_swap_chain_adequate);
+            DeviceRequirements::new(&REQUIRED_QUEUES, &DEVICE_EXTENSIONS, is_swap_chain_adequate, is_device_supporting_features);
         let physical_device = pick_physical_device(&instance, &surface_container, &requirements)
             .expect("Failed to create physical device");
+        let physical_device_properties = get_physical_device_properties(&instance, physical_device)
+            .expect("Failed to get physical device properties");
         // create logical device and queues
         let queue_indices = QueueFamilyIndices::find(
             &instance,
@@ -131,6 +139,7 @@ impl VulkanApp {
             &logical_device,
             command_pool,
             &queues,
+            &physical_device_properties,
         )
         .expect("Failed to create texture image");
 

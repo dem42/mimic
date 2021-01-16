@@ -33,6 +33,15 @@ impl PartialOrd for RatedPhyiscalDevice {
     }
 }
 
+pub fn get_physical_device_properties(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+) -> Result<vk::PhysicalDeviceProperties> {
+    let physical_device_properties =
+        unsafe { instance.get_physical_device_properties(physical_device) };
+    Ok(physical_device_properties)
+}
+
 // the device is implicitly destroyed when instance is destroyed
 pub fn pick_physical_device(
     instance: &ash::Instance,
@@ -127,6 +136,11 @@ fn rate_physical_device(
     // if we don't match required device extensions then return 0 as rating
     if check_device_extensions(instance, physical_device, requirements, &mut description)? == false
     {
+        return Ok((0, description));
+    }
+
+    if !(requirements.supported_features_check)(&physical_device_features) {
+        description.push_str("Physical device features don't support the necessary features");
         return Ok((0, description));
     }
 

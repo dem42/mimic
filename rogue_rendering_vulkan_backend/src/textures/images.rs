@@ -213,6 +213,8 @@ impl Image {
 pub struct TextureImage {
     pub name: String,
     pub image: Image,
+    pub view: vk::ImageView,
+    pub sampler: vk::Sampler,
 }
 
 impl TextureImage {
@@ -223,6 +225,7 @@ impl TextureImage {
         logical_device: &ash::Device,
         command_pool: vk::CommandPool,
         queues: &QueueMap,
+        physical_device_properties: &vk::PhysicalDeviceProperties,
     ) -> Result<Self> {
         let image = image::open(texture_name)?;
 
@@ -287,14 +290,86 @@ impl TextureImage {
             logical_device.free_memory(staging_buffer.memory, None);
         }
 
+        let view = Self::create_image_view(
+            texture_image.image,
+            vk::Format::R8G8B8A8_SRGB,
+            logical_device,
+        )?;
+
+        let sampler = Self::create_texture_sampler(logical_device, physical_device_properties)?;
+
         Ok(Self {
             name: texture_name.to_owned(),
             image: texture_image,
+            view,
+            sampler,
         })
     }
 
     pub unsafe fn drop(self, logical_device: &ash::Device) {
+        logical_device.destroy_sampler(self.sampler, None);
+        logical_device.destroy_image_view(self.view, None);
+
         logical_device.destroy_image(self.image.image, None);
         logical_device.free_memory(self.image.memory, None);
+    }
+
+    pub fn create_image_view(
+        image: vk::Image,
+        format: vk::Format,
+        logical_device: &ash::Device,
+    ) -> Result<vk::ImageView> {
+        let image_view_create_info = vk::ImageViewCreateInfo {
+            image,
+            view_type: vk::ImageViewType::TYPE_2D,
+            format,
+            components: vk::ComponentMapping::builder()
+                .r(vk::ComponentSwizzle::IDENTITY)
+                .g(vk::ComponentSwizzle::IDENTITY)
+                .b(vk::ComponentSwizzle::IDENTITY)
+                .a(vk::ComponentSwizzle::IDENTITY)
+                .build(),
+            subresource_range: vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build(),
+            ..Default::default()
+        };
+
+        let image_view =
+            unsafe { logical_device.create_image_view(&image_view_create_info, None)? };
+
+        Ok(image_view)
+    }
+
+    pub fn create_texture_sampler(
+        logical_device: &ash::Device,
+        physical_device_properties: &vk::PhysicalDeviceProperties,
+    ) -> Result<vk::Sampler> {
+        let sampler_create_info = vk::SamplerCreateInfo {
+            mag_filter: vk::Filter::LINEAR,
+            min_filter: vk::Filter::LINEAR,
+            address_mode_u: vk::SamplerAddressMode::REPEAT,
+            address_mode_v: vk::SamplerAddressMode::REPEAT,
+            address_mode_w: vk::SamplerAddressMode::REPEAT,
+            anisotropy_enable: vk::TRUE,
+            max_anisotropy: physical_device_properties.limits.max_sampler_anisotropy,
+            border_color: vk::BorderColor::INT_OPAQUE_BLACK,
+            unnormalized_coordinates: vk::FALSE,
+            compare_enable: vk::FALSE,
+            compare_op: vk::CompareOp::ALWAYS,
+            mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+            max_lod: 0.0,
+            min_lod: 0.0,
+            mip_lod_bias: 0.0,
+            ..Default::default()
+        };
+
+        let sampler = unsafe { logical_device.create_sampler(&sampler_create_info, None)? };
+
+        Ok(sampler)
     }
 }

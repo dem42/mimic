@@ -29,6 +29,7 @@ pub fn create_logical_device(
     }
 
     let device_features = vk::PhysicalDeviceFeatures {
+        sampler_anisotropy: vk::TRUE,
         ..vk::PhysicalDeviceFeatures::default()
     };
 
