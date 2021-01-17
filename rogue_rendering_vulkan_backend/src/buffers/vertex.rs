@@ -9,6 +9,7 @@ use std::convert::TryFrom;
 pub struct Vertex {
     pub pos: glm::Vec2,
     pub color: glm::Vec3,
+    pub tex_coord: glm::Vec2,
 }
 
 impl Vertex {
@@ -22,7 +23,7 @@ impl Vertex {
         })
     }
 
-    pub fn get_attribute_descriptions() -> Result<[vk::VertexInputAttributeDescription; 2]> {
+    pub fn get_attribute_descriptions() -> Result<[vk::VertexInputAttributeDescription; 3]> {
         Ok([
             vk::VertexInputAttributeDescription {
                 binding: 0,
@@ -37,6 +38,13 @@ impl Vertex {
                 location: 1,
                 format: vk::Format::R32G32B32_SFLOAT,
                 offset: u32::try_from(offset_of!(Vertex, color))?,
+            },
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                // vertex shader location 2 -> texture coords
+                location: 2,
+                format: vk::Format::R32G32_SFLOAT,
+                offset: u32::try_from(offset_of!(Vertex, tex_coord))?,
             },
         ])
     }

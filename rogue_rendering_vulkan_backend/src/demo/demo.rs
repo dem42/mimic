@@ -101,8 +101,12 @@ impl VulkanApp {
         let surface_container = util::platform::create_surface(&entry, &instance, &window)
             .expect("Failed to create surface");
         // pick the first graphics card that supports all the features we specified in instance
-        let requirements =
-            DeviceRequirements::new(&REQUIRED_QUEUES, &DEVICE_EXTENSIONS, is_swap_chain_adequate, is_device_supporting_features);
+        let requirements = DeviceRequirements::new(
+            &REQUIRED_QUEUES,
+            &DEVICE_EXTENSIONS,
+            is_swap_chain_adequate,
+            is_device_supporting_features,
+        );
         let physical_device = pick_physical_device(&instance, &surface_container, &requirements)
             .expect("Failed to create physical device");
         let physical_device_properties = get_physical_device_properties(&instance, physical_device)
@@ -183,6 +187,7 @@ impl VulkanApp {
             &vertex_buffer,
             &index_buffer,
             &uniform_descriptors,
+            &texture_image,
             &window,
         );
 
@@ -226,6 +231,7 @@ impl VulkanApp {
         vertex_buffer: &VertexBuffer,
         index_buffer: &IndexBuffer,
         uniform_descriptors: &vk::DescriptorSetLayout,
+        texture_image: &TextureImage,
         window: &Window,
     ) -> (
         SwapChainContainer,
@@ -274,6 +280,7 @@ impl VulkanApp {
             &swap_chain_container,
             *uniform_descriptors,
             &uniform_buffers,
+            texture_image,
         )
         .expect("Failed to create descriptor data");
 
@@ -325,6 +332,7 @@ impl VulkanApp {
             &self.vertex_buffer,
             &self.index_buffer,
             &self.uniform_descriptors,
+            &self.texture_image,
             window,
         );
 
@@ -490,7 +498,7 @@ impl VulkanApp {
     }
 
     fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
-        let angle_rad = apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
+        let angle_rad = 0.0;//apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
         let model = glm::rotate(
             &glm::Mat4::identity(),
             angle_rad,
@@ -498,17 +506,17 @@ impl VulkanApp {
         );
 
         let view = glm::look_at(
-            &glm::Vec3::new(2., 2., 2.),
+            &glm::Vec3::new(0., 2., 2.),
             &glm::Vec3::new(0., 0., 0.),
             &glm::Vec3::new(0., 0., 1.),
         );
 
         let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32
             / self.swap_chain_container.swap_chain_extent.height as f32;
-        let mut proj = glm::perspective(aspect_ratio, 45.0, 0.1, 10.0);
+        let mut proj = glm::perspective(aspect_ratio, 45.0 * std::f32::consts::PI / 180.0, 0.1, 10.0);
 
         // flip upside down because the perspective is the opengl computation
-        proj.m11 *= -1.0;
+        //proj.m11 *= -1.0;
 
         let ubos = [uniforms::buffers::UniformBufferObject {
             foo: uniforms::buffers::Foo {
