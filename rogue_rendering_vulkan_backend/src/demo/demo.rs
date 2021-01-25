@@ -498,25 +498,61 @@ impl VulkanApp {
     }
 
     fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
-        let angle_rad = 0.0;//apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
+        let angle_rad = apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
         let model = glm::rotate(
             &glm::Mat4::identity(),
             angle_rad,
-            &glm::Vec3::new(0., 0., 1.),
+            &glm::Vec3::new(0., 1., 0.),
         );
 
         let view = glm::look_at(
-            &glm::Vec3::new(0., 2., 2.),
+            &glm::Vec3::new(2., 2., 2.),
             &glm::Vec3::new(0., 0., 0.),
-            &glm::Vec3::new(0., 0., 1.),
+            &glm::Vec3::new(0., 1., 0.),
         );
 
         let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32
             / self.swap_chain_container.swap_chain_extent.height as f32;
-        let mut proj = glm::perspective(aspect_ratio, 45.0 * std::f32::consts::PI / 180.0, 0.1, 10.0);
 
-        // flip upside down because the perspective is the opengl computation
-        //proj.m11 *= -1.0;
+        // applying some corrections here because this calculation is for opengl 
+        // and we have vulkan where in ndc coords the y axis points down
+        // also it doesn't use reverse depth
+        let mut proj = glm::perspective_fov_rh_zo(
+            45.0 * std::f32::consts::PI / 180.0, 
+            self.swap_chain_container.swap_chain_extent.width as f32,
+            self.swap_chain_container.swap_chain_extent.height as f32,
+            0.1,
+            10.0);
+        
+        if apptime.frame % 1000 == 0 {
+            let focal_length = 1.0 / ((45.0 * std::f32::consts::PI / 180.0) / 2.0).tan();
+            let a = 10.0 / (0.1 - 10.0);
+            let b = (0.1 * 10.0) / (0.1 - 10.0);
+            log!(Log::Info, "{}, {}, {}, {}", focal_length / aspect_ratio, -focal_length, a, b);
+            log!(Log::Info, "Proj:\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]",
+                proj.m11,
+                proj.m12,
+                proj.m13,
+                proj.m14,
+                proj.m21,
+                proj.m22,
+                proj.m23,
+                proj.m24,
+                proj.m31,
+                proj.m32,
+                proj.m33,
+                proj.m34,
+                proj.m41,
+                proj.m42,
+                proj.m43,
+                proj.m44,
+        );
+        }
+
+        // the vulkan NDC plane is Y-axis pointing down
+        // glm::perspective gives us th opengl computation which has Y-axis pointing up
+        // so we need to change the scale of the y axis
+        proj.m22 *= -1.0;
 
         let ubos = [uniforms::buffers::UniformBufferObject {
             foo: uniforms::buffers::Foo {

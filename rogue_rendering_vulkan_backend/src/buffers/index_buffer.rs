@@ -56,7 +56,10 @@ impl IndexBuffer {
         logical_device.free_memory(self.data.memory, None);
     }
 
-    fn get_rectangle_indices() -> [IndexType; 6] {
-        [0, 1, 2, 2, 3, 0]
+    fn get_rectangle_indices() -> [IndexType; 12] {
+        [
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4,
+        ]
     }
 }

@@ -7,7 +7,7 @@ use std::convert::TryFrom;
 
 #[repr(C)]
 pub struct Vertex {
-    pub pos: glm::Vec2,
+    pub pos: glm::Vec3,
     pub color: glm::Vec3,
     pub tex_coord: glm::Vec2,
 }
@@ -29,7 +29,7 @@ impl Vertex {
                 binding: 0,
                 // vertex shader location 0 -> position
                 location: 0,
-                format: vk::Format::R32G32_SFLOAT,
+                format: vk::Format::R32G32B32_SFLOAT,
                 offset: u32::try_from(offset_of!(Vertex, pos))?,
             },
             vk::VertexInputAttributeDescription {

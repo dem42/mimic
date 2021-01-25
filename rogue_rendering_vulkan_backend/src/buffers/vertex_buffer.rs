@@ -48,27 +48,48 @@ impl VertexBuffer {
         logical_device.free_memory(self.data.memory, None);
     }
 
-    fn get_rectangle() -> [Vertex; 4] {
+    fn get_rectangle() -> [Vertex; 8] {
         [
             Vertex {
-                pos: glm::vec2(-0.5, -0.5),
+                pos: glm::vec3(-0.5, 0.0, -0.5),
                 color: glm::vec3(1.0, 0.0, 0.0),
-                tex_coord: glm::vec2(1.0, 0.0),
-            },
-            Vertex {
-                pos: glm::vec2(0.5, -0.5),
-                color: glm::vec3(0.0, 1.0, 0.0),
                 tex_coord: glm::vec2(0.0, 0.0),
             },
             Vertex {
-                pos: glm::vec2(0.5, 0.5),
-                color: glm::vec3(0.0, 0.0, 1.0),
-                tex_coord: glm::vec2(0.0, 1.0),
+                pos: glm::vec3(0.5, 0.0, -0.5),
+                color: glm::vec3(0.0, 1.0, 0.0),
+                tex_coord: glm::vec2(1.0, 0.0),
             },
             Vertex {
-                pos: glm::vec2(-0.5, 0.5),
-                color: glm::vec3(1.0, 1.0, 1.0),
+                pos: glm::vec3(0.5, 0.0, 0.5),
+                color: glm::vec3(0.0, 0.0, 1.0),
                 tex_coord: glm::vec2(1.0, 1.0),
+            },
+            Vertex {
+                pos: glm::vec3(-0.5, 0.0, 0.5),
+                color: glm::vec3(1.0, 1.0, 1.0),
+                tex_coord: glm::vec2(0.0, 1.0),
+            },
+            // second rectangle
+            Vertex {
+                pos: glm::vec3(-0.5, -0.5, -0.5),
+                color: glm::vec3(1.0, 0.0, 0.0),
+                tex_coord: glm::vec2(0.0, 0.0),
+            },
+            Vertex {
+                pos: glm::vec3(0.5, -0.5, -0.5),
+                color: glm::vec3(0.0, 1.0, 0.0),
+                tex_coord: glm::vec2(1.0, 0.0),
+            },
+            Vertex {
+                pos: glm::vec3(0.5, -0.5, 0.5),
+                color: glm::vec3(0.0, 0.0, 1.0),
+                tex_coord: glm::vec2(1.0, 1.0),
+            },
+            Vertex {
+                pos: glm::vec3(-0.5, -0.5, 0.5),
+                color: glm::vec3(1.0, 1.0, 1.0),
+                tex_coord: glm::vec2(0.0, 1.0),
             },
         ]
     }

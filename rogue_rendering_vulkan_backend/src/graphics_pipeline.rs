@@ -117,9 +117,6 @@ impl GraphicsPipeline {
             polygon_mode: vk::PolygonMode::FILL,
             line_width: 1.0f32,
             cull_mode: vk::CullModeFlags::BACK,
-            // we are flipping things upside down with proj.m11 *= -1 so we want counter clockwise
-            // to give the direction that defines the front face
-            // we do this because normally we specify our meshes in clockwise but without the flip
             front_face: vk::FrontFace::CLOCKWISE,
             depth_bias_enable: vk::FALSE,
             ..Default::default()
