@@ -3,6 +3,7 @@ extern crate nalgebra_glm as glm;
 extern crate rustylog;
 
 pub mod buffers;
+pub mod depth;
 pub mod devices;
 pub mod drawing;
 pub mod graphics_pipeline;

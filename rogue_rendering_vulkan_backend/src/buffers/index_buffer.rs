@@ -57,9 +57,6 @@ impl IndexBuffer {
     }
 
     fn get_rectangle_indices() -> [IndexType; 12] {
-        [
-            0, 1, 2, 2, 3, 0,
-            4, 5, 6, 6, 7, 4,
-        ]
+        [0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4]
     }
 }

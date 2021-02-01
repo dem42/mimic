@@ -11,6 +11,9 @@ pub type Result<T> = std::result::Result<T, VulkanError>;
 pub enum VulkanError {
     #[error("Failed to find command buffer with index: {0}")]
     CommandBufferNotAvailable(usize),
+    // depth
+    #[error("Failed to find supported format")]
+    DepthFailedToFindSupportedFormat,
     // descriptors
     #[error("Incorrect number of descriptors sets: {0}")]
     DescriptorSetNotAvailable(usize),

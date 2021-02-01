@@ -1,8 +1,13 @@
-use crate::buffers::buffer::Buffer;
-use crate::buffers::memory::{self, MemoryCopyable};
-use crate::devices::queues::QueueMap;
-use crate::drawing::command_buffers::{begin_single_time_commands, end_single_time_commands};
-use crate::util::result::{Result, VulkanError};
+use crate::{
+    buffers::{
+        buffer::Buffer,
+        memory::{self, MemoryCopyable},
+    },
+    depth::helpers,
+    devices::queues::QueueMap,
+    drawing::command_buffers::{begin_single_time_commands, end_single_time_commands},
+    util::result::{Result, VulkanError},
+};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -137,12 +142,22 @@ impl Image {
         &mut self,
         old_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
-        _format: vk::Format,
+        format: vk::Format,
         logical_device: &ash::Device,
         command_pool: vk::CommandPool,
         queues: &QueueMap,
     ) -> Result<()> {
         let command_buffer = begin_single_time_commands(logical_device, command_pool)?;
+
+        let aspect_mask = if new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+            if helpers::has_stencil_component(format) {
+                vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL
+            } else {
+                vk::ImageAspectFlags::DEPTH
+            }
+        } else {
+            vk::ImageAspectFlags::COLOR
+        };
 
         let (src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask) =
             match (old_layout, new_layout) {
@@ -161,6 +176,15 @@ impl Image {
                     vk::PipelineStageFlags::TRANSFER,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
                 ),
+                (vk::ImageLayout::UNDEFINED, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL) => {
+                    (
+                        vk::AccessFlags::empty(),
+                        vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
+                        vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+                    )
+                }
                 _ => {
                     return Err(VulkanError::ImageLayoutTransitionNotSupported(format!(
                         "{:?} -> {:?}",
@@ -176,7 +200,7 @@ impl Image {
             dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
             image: self.image,
             subresource_range: vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .aspect_mask(aspect_mask)
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)
@@ -206,6 +230,38 @@ impl Image {
         end_single_time_commands(command_buffer, logical_device, queues, command_pool)?;
 
         Ok(())
+    }
+
+    pub fn create_image_view(
+        &self,
+        format: vk::Format,
+        aspect_flags: vk::ImageAspectFlags,
+        logical_device: &ash::Device,
+    ) -> Result<vk::ImageView> {
+        let image_view_create_info = vk::ImageViewCreateInfo {
+            image: self.image,
+            view_type: vk::ImageViewType::TYPE_2D,
+            format,
+            components: vk::ComponentMapping::builder()
+                .r(vk::ComponentSwizzle::IDENTITY)
+                .g(vk::ComponentSwizzle::IDENTITY)
+                .b(vk::ComponentSwizzle::IDENTITY)
+                .a(vk::ComponentSwizzle::IDENTITY)
+                .build(),
+            subresource_range: vk::ImageSubresourceRange::builder()
+                .aspect_mask(aspect_flags)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build(),
+            ..Default::default()
+        };
+
+        let image_view =
+            unsafe { logical_device.create_image_view(&image_view_create_info, None)? };
+
+        Ok(image_view)
     }
 }
 
@@ -290,9 +346,9 @@ impl TextureImage {
             logical_device.free_memory(staging_buffer.memory, None);
         }
 
-        let view = Self::create_image_view(
-            texture_image.image,
+        let view = texture_image.create_image_view(
             vk::Format::R8G8B8A8_SRGB,
+            vk::ImageAspectFlags::COLOR,
             logical_device,
         )?;
 
@@ -312,37 +368,6 @@ impl TextureImage {
 
         logical_device.destroy_image(self.image.image, None);
         logical_device.free_memory(self.image.memory, None);
-    }
-
-    pub fn create_image_view(
-        image: vk::Image,
-        format: vk::Format,
-        logical_device: &ash::Device,
-    ) -> Result<vk::ImageView> {
-        let image_view_create_info = vk::ImageViewCreateInfo {
-            image,
-            view_type: vk::ImageViewType::TYPE_2D,
-            format,
-            components: vk::ComponentMapping::builder()
-                .r(vk::ComponentSwizzle::IDENTITY)
-                .g(vk::ComponentSwizzle::IDENTITY)
-                .b(vk::ComponentSwizzle::IDENTITY)
-                .a(vk::ComponentSwizzle::IDENTITY)
-                .build(),
-            subresource_range: vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_mip_level(0)
-                .level_count(1)
-                .base_array_layer(0)
-                .layer_count(1)
-                .build(),
-            ..Default::default()
-        };
-
-        let image_view =
-            unsafe { logical_device.create_image_view(&image_view_create_info, None)? };
-
-        Ok(image_view)
     }
 
     pub fn create_texture_sampler(

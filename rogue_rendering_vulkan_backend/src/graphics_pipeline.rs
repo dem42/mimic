@@ -1,18 +1,14 @@
 pub mod render_pass;
 pub mod shader_module;
 
-use crate::buffers::vertex::Vertex;
-use crate::graphics_pipeline::render_pass::create_render_pass;
-use crate::graphics_pipeline::shader_module::create_shader_module;
-use crate::presentation::swap_chain::SwapChainContainer;
-use crate::util::result::{Result, VulkanError};
-
-use ash::version::DeviceV1_0;
-use ash::vk;
-use std::convert::TryFrom;
-use std::ffi::CString;
-use std::path::Path;
-use std::ptr;
+use crate::{
+    buffers::vertex::Vertex,
+    graphics_pipeline::{render_pass::create_render_pass, shader_module::create_shader_module},
+    presentation::swap_chain::SwapChainContainer,
+    util::result::{Result, VulkanError},
+};
+use ash::{version::DeviceV1_0, vk};
+use std::{convert::TryFrom, ffi::CString, path::Path, ptr};
 
 pub struct GraphicsPipeline {
     pub render_pass: vk::RenderPass,
@@ -21,14 +17,27 @@ pub struct GraphicsPipeline {
 }
 
 impl GraphicsPipeline {
-    pub const CLEAR_COLORS: [vk::ClearValue; 1] = [vk::ClearValue {
-        color: vk::ClearColorValue {
-            float32: [0.0, 0.0, 0.0, 1.0],
+    // order of clear values has to match order of attachments in our render pass
+    pub const CLEAR_COLORS: [vk::ClearValue; 2] = [
+        vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
         },
-    }];
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                // set the initial value in depth buffer to be the furthest value
+                // the far plane is 1, the near plane is 0
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
 
     pub fn new(
+        instance: &ash::Instance,
         logical_device: &ash::Device,
+        physical_device: vk::PhysicalDevice,
         swap_chain_container: &SwapChainContainer,
         uniform_descriptors: &vk::DescriptorSetLayout,
     ) -> Result<Self> {
@@ -146,13 +155,31 @@ impl GraphicsPipeline {
             ..Default::default()
         };
 
+        // enable depth testing in graphics pipleine
+        let depth_stencil = vk::PipelineDepthStencilStateCreateInfo {
+            depth_test_enable: vk::TRUE,
+            depth_write_enable: vk::TRUE,
+            // lower means closer, so keep fragments that have less depth
+            depth_compare_op: vk::CompareOp::LESS,
+            depth_bounds_test_enable: vk::FALSE,
+            min_depth_bounds: 0.0,
+            max_depth_bounds: 1.0,
+            stencil_test_enable: vk::FALSE,
+            ..Default::default()
+        };
+
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
             set_layout_count: 1,
             p_set_layouts: uniform_descriptors,
             ..Default::default()
         };
 
-        let render_pass = create_render_pass(logical_device, swap_chain_container)?;
+        let render_pass = create_render_pass(
+            instance,
+            logical_device,
+            physical_device,
+            swap_chain_container,
+        )?;
 
         let pipeline_layout =
             unsafe { logical_device.create_pipeline_layout(&pipeline_layout_create_info, None)? };
@@ -167,7 +194,7 @@ impl GraphicsPipeline {
             p_viewport_state: &viewport_create_info,
             p_rasterization_state: &rasterization_create_info,
             p_multisample_state: &multisampling_create_info,
-            p_depth_stencil_state: ptr::null(),
+            p_depth_stencil_state: &depth_stencil,
             p_color_blend_state: &color_blending_create_info,
             p_dynamic_state: ptr::null(),
             // layout defining uniforms etc

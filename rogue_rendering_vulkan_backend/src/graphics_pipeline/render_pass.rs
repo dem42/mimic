@@ -1,13 +1,16 @@
-use crate::presentation::swap_chain::SwapChainContainer;
-use crate::util::result::Result;
+use crate::{depth::helpers, presentation::swap_chain::SwapChainContainer, util::result::Result};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+use std::convert::TryFrom;
 
 pub fn create_render_pass(
+    instance: &ash::Instance,
     logical_device: &ash::Device,
+    physical_device: vk::PhysicalDevice,
     swap_chain_container: &SwapChainContainer,
 ) -> Result<vk::RenderPass> {
+    // setup the descriptions for the attachments used by the render pass
     let color_attachment = vk::AttachmentDescription {
         format: swap_chain_container.swap_chain_format.format,
         samples: vk::SampleCountFlags::TYPE_1,
@@ -20,12 +23,30 @@ pub fn create_render_pass(
         ..Default::default()
     };
 
+    let depth_attachment = vk::AttachmentDescription {
+        format: helpers::find_depth_format(instance, physical_device)?,
+        samples: vk::SampleCountFlags::TYPE_1,
+        load_op: vk::AttachmentLoadOp::CLEAR,
+        store_op: vk::AttachmentStoreOp::DONT_CARE,
+        stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+        stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+        initial_layout: vk::ImageLayout::UNDEFINED,
+        final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        ..Default::default()
+    };
+
     // define a reference into the AttachmentDescription array
     // use the references in render subpasses
     // the attachment is an index into the array passed to p_attachments of renderPassCreateInfo
     let color_attachment_ref = vk::AttachmentReference {
         attachment: 0,
         layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        ..Default::default()
+    };
+
+    let depth_attachment_ref = vk::AttachmentReference {
+        attachment: 1,
+        layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         ..Default::default()
     };
 
@@ -37,10 +58,11 @@ pub fn create_render_pass(
         pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
         color_attachment_count: 1,
         p_color_attachments: &color_attachment_ref,
+        p_depth_stencil_attachment: &depth_attachment_ref,
         ..Default::default()
     };
 
-    // subpasses can specify what needs to happen before using subpass dependencies
+    // subpasses can specify what needs to happen before by using subpass dependencies
     // this is done because image layout transitions which subpasses specify happen automatically
     // but due to synchronization we need to make sure we do them at the right time
     // which is what we use the subpass dependencies for here
@@ -50,17 +72,23 @@ pub fn create_render_pass(
         // index of our subpass
         dst_subpass: 0,
         // wait for swapchain to finish reading from the image, before we access it
-        src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+        // likewise wait for early fragments test to do the read from depth image before we access it
+        src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+            | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
         src_access_mask: vk::AccessFlags::empty(),
         // prevent image layout transition from happening until it is necessary (when we start writing to it)
-        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-        dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+            | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+        dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
         ..Default::default()
     };
 
+    let attachments = [color_attachment, depth_attachment];
+    let attachment_count = u32::try_from(attachments.len())?;
     let render_pass_create_info = vk::RenderPassCreateInfo {
-        attachment_count: 1,
-        p_attachments: &color_attachment,
+        attachment_count,
+        p_attachments: attachments.as_ptr(),
         subpass_count: 1,
         p_subpasses: &subpass,
         dependency_count: 1,

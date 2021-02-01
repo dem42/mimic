@@ -1,43 +1,45 @@
 use nalgebra_glm as glm;
 
-use rogue_rendering_vulkan_backend::buffers::buffer::Buffer;
-use rogue_rendering_vulkan_backend::buffers::index_buffer::IndexBuffer;
-use rogue_rendering_vulkan_backend::buffers::memory;
-use rogue_rendering_vulkan_backend::buffers::vertex_buffer::VertexBuffer;
-use rogue_rendering_vulkan_backend::devices::logical_device::create_logical_device;
-use rogue_rendering_vulkan_backend::devices::physical_device::{
-    get_physical_device_properties, pick_physical_device,
+use rogue_rendering_vulkan_backend::{
+    buffers::{buffer::Buffer, index_buffer::IndexBuffer, memory, vertex_buffer::VertexBuffer},
+    depth::depth_resource::DepthResource,
+    devices::{
+        logical_device::create_logical_device,
+        physical_device::{get_physical_device_properties, pick_physical_device},
+        queues::{QueueFamilyIndices, QueueMap, QueueType},
+        requirements::DeviceRequirements,
+    },
+    drawing::{command_buffers, framebuffers, synchronization::SynchronizationContainer},
+    graphics_pipeline::GraphicsPipeline,
+    presentation::{
+        image_views::ImageViews,
+        swap_chain::{SwapChainContainer, SwapChainSupportDetails},
+    },
+    textures::images::TextureImage,
+    uniforms::{self, descriptors::DescriptorData},
+    util::{
+        self,
+        debug::VulkanDebug,
+        platform::SurfaceContainer,
+        result::{Result, VulkanError},
+        validation::VulkanValidation,
+    },
 };
-use rogue_rendering_vulkan_backend::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
-use rogue_rendering_vulkan_backend::devices::requirements::DeviceRequirements;
-use rogue_rendering_vulkan_backend::drawing::synchronization::SynchronizationContainer;
-use rogue_rendering_vulkan_backend::drawing::{command_buffers, framebuffers};
-use rogue_rendering_vulkan_backend::graphics_pipeline::GraphicsPipeline;
-use rogue_rendering_vulkan_backend::presentation::image_views::ImageViews;
-use rogue_rendering_vulkan_backend::presentation::swap_chain::{
-    SwapChainContainer, SwapChainSupportDetails,
-};
-use rogue_rendering_vulkan_backend::textures::images::TextureImage;
-use rogue_rendering_vulkan_backend::uniforms;
-use rogue_rendering_vulkan_backend::uniforms::descriptors::DescriptorData;
-use rogue_rendering_vulkan_backend::util;
-use rogue_rendering_vulkan_backend::util::debug::VulkanDebug;
-use rogue_rendering_vulkan_backend::util::platform::SurfaceContainer;
-use rogue_rendering_vulkan_backend::util::result::{Result, VulkanError};
-use rogue_rendering_vulkan_backend::util::validation::VulkanValidation;
 
 use rustylog::{log, Log};
 use rustyutil::apptime::AppTime;
 
-use ash::prelude::VkResult;
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::vk;
-use std::convert::TryFrom;
-use std::ffi::CString;
-use std::ptr;
-use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::Window;
+use ash::{
+    prelude::VkResult,
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    vk,
+};
+use std::{convert::TryFrom, ffi::CString, ptr};
+use winit::{
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::Window,
+};
 
 const WINDOW_TITLE: &'static str = "Vulkan Demo";
 const ENGINE_NAME: &'static str = "Vulkan Engine";
@@ -71,6 +73,7 @@ struct VulkanApp {
     image_views_container: ImageViews,
     uniform_descriptors: vk::DescriptorSetLayout,
     graphics_pipeline: GraphicsPipeline,
+    depth_resource: DepthResource,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     vertex_buffer: VertexBuffer,
@@ -173,6 +176,7 @@ impl VulkanApp {
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
+            depth_resource,
             framebuffers,
             uniform_buffers,
             descriptor_data,
@@ -184,6 +188,7 @@ impl VulkanApp {
             &queue_indices,
             &surface_container,
             &command_pool,
+            &queues,
             &vertex_buffer,
             &index_buffer,
             &uniform_descriptors,
@@ -205,6 +210,7 @@ impl VulkanApp {
             image_views_container,
             uniform_descriptors,
             graphics_pipeline,
+            depth_resource,
             framebuffers,
             command_pool,
             vertex_buffer,
@@ -228,6 +234,7 @@ impl VulkanApp {
         queue_indices: &QueueFamilyIndices,
         surface_container: &SurfaceContainer,
         command_pool: &vk::CommandPool,
+        queues: &QueueMap,
         vertex_buffer: &VertexBuffer,
         index_buffer: &IndexBuffer,
         uniform_descriptors: &vk::DescriptorSetLayout,
@@ -237,6 +244,7 @@ impl VulkanApp {
         SwapChainContainer,
         ImageViews,
         GraphicsPipeline,
+        DepthResource,
         Vec<vk::Framebuffer>,
         Vec<Buffer>,
         DescriptorData,
@@ -255,14 +263,30 @@ impl VulkanApp {
         let image_views_container = ImageViews::new(logical_device, &swap_chain_container)
             .expect("Failed to create image views");
 
-        let graphics_pipeline =
-            GraphicsPipeline::new(logical_device, &swap_chain_container, uniform_descriptors)
-                .expect("Failed to create graphics pipeline");
+        let graphics_pipeline = GraphicsPipeline::new(
+            instance,
+            logical_device,
+            physical_device,
+            &swap_chain_container,
+            uniform_descriptors,
+        )
+        .expect("Failed to create graphics pipeline");
+
+        let depth_resource = DepthResource::new(
+            instance,
+            logical_device,
+            physical_device,
+            &swap_chain_container,
+            *command_pool,
+            queues,
+        )
+        .expect("Failed to create depth resoruce");
 
         let framebuffers = framebuffers::create_framebuffers(
             logical_device,
             &graphics_pipeline,
             &image_views_container,
+            depth_resource.depth_image_view,
             &swap_chain_container,
         )
         .expect("Failed to create framebuffers");
@@ -301,6 +325,7 @@ impl VulkanApp {
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
+            depth_resource,
             framebuffers,
             uniform_buffers,
             descriptor_data,
@@ -318,6 +343,7 @@ impl VulkanApp {
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
+            depth_resource,
             framebuffers,
             uniform_buffers,
             descriptor_data,
@@ -329,6 +355,7 @@ impl VulkanApp {
             &self.queue_indices,
             &self.surface_container,
             &self.command_pool,
+            &self.queues,
             &self.vertex_buffer,
             &self.index_buffer,
             &self.uniform_descriptors,
@@ -339,6 +366,7 @@ impl VulkanApp {
         self.swap_chain_container = swap_chain_container;
         self.image_views_container = image_views_container;
         self.graphics_pipeline = graphics_pipeline;
+        self.depth_resource = depth_resource;
         self.framebuffers = framebuffers;
         self.uniform_buffers = uniform_buffers;
         self.descriptor_data = descriptor_data;
@@ -514,22 +542,32 @@ impl VulkanApp {
         let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32
             / self.swap_chain_container.swap_chain_extent.height as f32;
 
-        // applying some corrections here because this calculation is for opengl 
+        // applying some corrections here because this calculation is for opengl
         // and we have vulkan where in ndc coords the y axis points down
         // also it doesn't use reverse depth
         let mut proj = glm::perspective_fov_rh_zo(
-            45.0 * std::f32::consts::PI / 180.0, 
+            45.0 * std::f32::consts::PI / 180.0,
             self.swap_chain_container.swap_chain_extent.width as f32,
             self.swap_chain_container.swap_chain_extent.height as f32,
             0.1,
-            10.0);
-        
+            10.0,
+        );
+
         if apptime.frame % 1000 == 0 {
             let focal_length = 1.0 / ((45.0 * std::f32::consts::PI / 180.0) / 2.0).tan();
             let a = 10.0 / (0.1 - 10.0);
             let b = (0.1 * 10.0) / (0.1 - 10.0);
-            log!(Log::Info, "{}, {}, {}, {}", focal_length / aspect_ratio, -focal_length, a, b);
-            log!(Log::Info, "Proj:\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]",
+            log!(
+                Log::Info,
+                "{}, {}, {}, {}",
+                focal_length / aspect_ratio,
+                -focal_length,
+                a,
+                b
+            );
+            log!(
+                Log::Info,
+                "Proj:\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]",
                 proj.m11,
                 proj.m12,
                 proj.m13,
@@ -546,7 +584,7 @@ impl VulkanApp {
                 proj.m42,
                 proj.m43,
                 proj.m44,
-        );
+            );
         }
 
         // the vulkan NDC plane is Y-axis pointing down
@@ -632,7 +670,9 @@ impl VulkanApp {
             .expect("Failed to create window.")
     }
 
-    unsafe fn cleanup_swap_chain(&self) {
+    unsafe fn cleanup_swap_chain(&mut self) {
+        std::mem::take(&mut self.depth_resource).drop(&self.logical_device);
+
         for framebuffer in self.framebuffers.iter() {
             self.logical_device.destroy_framebuffer(*framebuffer, None);
         }
