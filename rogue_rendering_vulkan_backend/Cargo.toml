@@ -10,11 +10,13 @@ build = "build.rs"
 
 [dependencies]
 ash = "0.31.0"
-winit = "0.23.0"
-nalgebra-glm = "0.9.0"
-memoffset = "0.6.1"
-thiserror = "1.0.23"
+bitflags = "1.2.1"
 image = "0.23.12"
+memoffset = "0.6.1"
+nalgebra-glm = "0.9.0"
+thiserror = "1.0.23"
+tobj = "2.0.3"
+winit = "0.23.0"
 
 [dependencies.rustylog]
 path = "../rustylog"

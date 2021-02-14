@@ -9,10 +9,12 @@ use crate::{
     util::result::{Result, VulkanError},
 };
 
-use ash::version::DeviceV1_0;
-use ash::vk;
+use ash::{
+    version::{DeviceV1_0, InstanceV1_0},
+    vk,
+};
 use image::GenericImageView;
-use vk::Extent3D;
+use std::{cmp::max, convert::TryFrom, f32};
 
 #[derive(Default)]
 pub struct Image {
@@ -20,6 +22,7 @@ pub struct Image {
     pub width: u32,
     pub height: u32,
     pub memory: vk::DeviceMemory,
+    pub mip_levels: u32,
 }
 
 impl MemoryCopyable for [u8] {
@@ -29,10 +32,17 @@ impl MemoryCopyable for [u8] {
     }
 }
 
+#[derive(Debug)]
+pub enum MipmapParam {
+    NoMipmap,
+    UseMipmap,
+}
+
 impl Image {
     pub fn new(
         width: u32,
         height: u32,
+        mipmap_param: MipmapParam,
         format: vk::Format,
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
@@ -41,14 +51,20 @@ impl Image {
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
     ) -> Result<Self> {
+        // number of mip level = how many times we can scale the image down by a half
+        let mip_levels = match mipmap_param {
+            MipmapParam::UseMipmap => ((max(width, height) as f32).log2().floor() as u32) + 1,
+            MipmapParam::NoMipmap => 1,
+        };
+
         let image_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
-            extent: Extent3D::builder()
+            extent: vk::Extent3D::builder()
                 .height(height)
                 .width(width)
                 .depth(1)
                 .build(),
-            mip_levels: 1,
+            mip_levels,
             array_layers: 1,
             format,
             tiling,
@@ -88,6 +104,7 @@ impl Image {
             width,
             height,
             memory: image_device_memory,
+            mip_levels,
         })
     }
 
@@ -133,9 +150,7 @@ impl Image {
             );
         }
 
-        end_single_time_commands(command_buffer, logical_device, queues, command_pool)?;
-
-        Ok(())
+        end_single_time_commands(command_buffer, logical_device, queues, command_pool)
     }
 
     pub fn transition_image_layout(
@@ -202,7 +217,7 @@ impl Image {
             subresource_range: vk::ImageSubresourceRange::builder()
                 .aspect_mask(aspect_mask)
                 .base_mip_level(0)
-                .level_count(1)
+                .level_count(self.mip_levels)
                 .base_array_layer(0)
                 .layer_count(1)
                 .build(),
@@ -227,9 +242,7 @@ impl Image {
             );
         }
 
-        end_single_time_commands(command_buffer, logical_device, queues, command_pool)?;
-
-        Ok(())
+        end_single_time_commands(command_buffer, logical_device, queues, command_pool)
     }
 
     pub fn create_image_view(
@@ -251,7 +264,7 @@ impl Image {
             subresource_range: vk::ImageSubresourceRange::builder()
                 .aspect_mask(aspect_flags)
                 .base_mip_level(0)
-                .level_count(1)
+                .level_count(self.mip_levels)
                 .base_array_layer(0)
                 .layer_count(1)
                 .build(),
@@ -307,9 +320,16 @@ impl TextureImage {
         let mut texture_image = Image::new(
             width,
             height,
+            MipmapParam::UseMipmap,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            // the image has the usage
+            // 1) transfer source for Blit operations to create mip levels
+            // 2) transfer dest for copying staging buffer into it
+            // 3) sampled for usage in a sampler in a shader
+            vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
             instance,
             physical_device,
@@ -332,11 +352,13 @@ impl TextureImage {
             queues,
         )?;
 
-        texture_image.transition_image_layout(
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        // as part of generating mipmaps all the mip levels transition to the shader read optimal layout
+        Self::generate_mipmaps(
+            &texture_image,
             vk::Format::R8G8B8A8_SRGB,
+            instance,
             logical_device,
+            physical_device,
             command_pool,
             queues,
         )?;
@@ -352,7 +374,11 @@ impl TextureImage {
             logical_device,
         )?;
 
-        let sampler = Self::create_texture_sampler(logical_device, physical_device_properties)?;
+        let sampler = Self::create_texture_sampler(
+            logical_device,
+            physical_device_properties,
+            texture_image.mip_levels,
+        )?;
 
         Ok(Self {
             name: texture_name.to_owned(),
@@ -373,6 +399,7 @@ impl TextureImage {
     pub fn create_texture_sampler(
         logical_device: &ash::Device,
         physical_device_properties: &vk::PhysicalDeviceProperties,
+        mip_levels: u32,
     ) -> Result<vk::Sampler> {
         let sampler_create_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
@@ -387,7 +414,7 @@ impl TextureImage {
             compare_enable: vk::FALSE,
             compare_op: vk::CompareOp::ALWAYS,
             mipmap_mode: vk::SamplerMipmapMode::LINEAR,
-            max_lod: 0.0,
+            max_lod: mip_levels as f32,
             min_lod: 0.0,
             mip_lod_bias: 0.0,
             ..Default::default()
@@ -396,5 +423,167 @@ impl TextureImage {
         let sampler = unsafe { logical_device.create_sampler(&sampler_create_info, None)? };
 
         Ok(sampler)
+    }
+
+    // TODO: that runtime generation of mipmaps is worse than reading them from the file
+    fn generate_mipmaps(
+        image: &Image,
+        format: vk::Format,
+        instance: &ash::Instance,
+        logical_device: &ash::Device,
+        physical_device: vk::PhysicalDevice,
+        command_pool: vk::CommandPool,
+        queues: &QueueMap,
+    ) -> Result<()> {
+        // before doing anything, we need to check if the format supports linear blitting
+        let physical_device_properties =
+            unsafe { instance.get_physical_device_format_properties(physical_device, format) };
+        if !physical_device_properties
+            .optimal_tiling_features
+            .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
+        {
+            return Err(VulkanError::ImageLinearBlittingNotSupported);
+        }
+
+        let command_buffer = begin_single_time_commands(logical_device, command_pool)?;
+
+        let mut memory_barrier = vk::ImageMemoryBarrier {
+            image: image.image,
+            src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+            dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+            subresource_range: vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_array_layer(0)
+                .layer_count(1)
+                .level_count(1)
+                .build(),
+            ..Default::default()
+        };
+
+        let mut prev_mip_width = i32::try_from(image.width)?;
+        let mut prev_mip_height = i32::try_from(image.height)?;
+
+        for cur_mip_level in 1..image.mip_levels {
+            let cur_mip_width = if prev_mip_width > 1 {
+                prev_mip_width / 2
+            } else {
+                1
+            };
+            let cur_mip_height = if prev_mip_height > 1 {
+                prev_mip_height / 2
+            } else {
+                1
+            };
+            let prev_mip_level = cur_mip_level - 1;
+
+            // prepare reusable barrier for blit to read from previous mip
+            memory_barrier.subresource_range.base_mip_level = prev_mip_level;
+            memory_barrier.old_layout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
+            memory_barrier.new_layout = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
+            memory_barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+            memory_barrier.dst_access_mask = vk::AccessFlags::TRANSFER_READ;
+
+            // this will now block until the transfer write happens either from previous blit of from copy buffer
+            unsafe {
+                logical_device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[memory_barrier],
+                );
+            }
+
+            let mut image_blit_builder = vk::ImageBlit::builder();
+            // the two corners of the space to blit from
+            image_blit_builder.src_offsets = [
+                vk::Offset3D { x: 0, y: 0, z: 0 },
+                vk::Offset3D {
+                    x: prev_mip_width,
+                    y: prev_mip_height,
+                    z: 1,
+                },
+            ];
+            image_blit_builder.src_subresource = vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .mip_level(prev_mip_level)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build();
+            // the two corners of the space to blit to
+            image_blit_builder.dst_offsets = [
+                vk::Offset3D { x: 0, y: 0, z: 0 },
+                vk::Offset3D {
+                    x: cur_mip_width,
+                    y: cur_mip_height,
+                    z: 1,
+                },
+            ];
+            image_blit_builder.dst_subresource = vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .mip_level(cur_mip_level)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build();
+
+            // do the mip -> mip downscale blit
+            unsafe {
+                logical_device.cmd_blit_image(
+                    command_buffer,
+                    image.image,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    image.image,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[image_blit_builder.build()],
+                    vk::Filter::LINEAR,
+                );
+            }
+
+            // prepare reusable barrier to block until layer transitions into a shader read optimal layout
+            // specify that this transition can happen after the transfer read that was reading to do the mip -> mip downscale blit
+            memory_barrier.subresource_range.base_mip_level = prev_mip_level;
+            memory_barrier.old_layout = vk::ImageLayout::TRANSFER_SRC_OPTIMAL;
+            memory_barrier.new_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+            memory_barrier.src_access_mask = vk::AccessFlags::TRANSFER_READ;
+            memory_barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
+
+            unsafe {
+                logical_device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[memory_barrier],
+                );
+            }
+
+            prev_mip_width = cur_mip_width;
+            prev_mip_height = cur_mip_height;
+        }
+
+        // we need one more transition since the last mip level doesn't get handled by the loop
+        memory_barrier.subresource_range.base_mip_level = image.mip_levels - 1;
+        memory_barrier.old_layout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
+        memory_barrier.new_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+        memory_barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+        memory_barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
+
+        unsafe {
+            logical_device.cmd_pipeline_barrier(
+                command_buffer,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[memory_barrier],
+            );
+        }
+
+        end_single_time_commands(command_buffer, logical_device, queues, command_pool)
     }
 }

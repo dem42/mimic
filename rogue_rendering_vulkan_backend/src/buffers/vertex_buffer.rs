@@ -1,12 +1,8 @@
-use crate::buffers::buffer::Buffer;
-
-use crate::devices::queues::QueueMap;
-use crate::util::result::Result;
-
-use crate::buffers::vertex::Vertex;
-
-use ash::version::DeviceV1_0;
-use ash::vk;
+use crate::{
+    buffers::buffer::Buffer, devices::queues::QueueMap, models::vertex::Vertex,
+    util::result::Result,
+};
+use ash::{version::DeviceV1_0, vk};
 use std::convert::TryFrom;
 
 #[derive(Default)]
@@ -17,14 +13,14 @@ pub struct VertexBuffer {
 
 impl VertexBuffer {
     pub fn new(
+        data: &[Vertex],
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
         command_pool: vk::CommandPool,
         queues: &QueueMap,
     ) -> Result<Self> {
-        let data = Self::get_rectangle();
-        let size = vk::DeviceSize::try_from(std::mem::size_of_val(&data))?;
+        let size = vk::DeviceSize::try_from(std::mem::size_of::<Vertex>() * data.len())?;
 
         let vertex_buffer = Buffer::create_and_fill(
             instance,
@@ -48,7 +44,7 @@ impl VertexBuffer {
         logical_device.free_memory(self.data.memory, None);
     }
 
-    fn get_rectangle() -> [Vertex; 8] {
+    pub fn get_rectangle() -> [Vertex; 8] {
         [
             Vertex {
                 pos: glm::vec3(-0.5, 0.0, -0.5),

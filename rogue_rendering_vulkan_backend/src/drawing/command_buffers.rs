@@ -1,16 +1,14 @@
-use crate::buffers::index_buffer::IndexBuffer;
-use crate::buffers::vertex_buffer::VertexBuffer;
-use crate::devices::queues::{QueueFamilyIndices, QueueMap, QueueType};
-use crate::graphics_pipeline::GraphicsPipeline;
-use crate::presentation::swap_chain::SwapChainContainer;
-use crate::uniforms::descriptors::DescriptorData;
-use crate::util::result::{Result, VulkanError};
-
-use ash::version::DeviceV1_0;
-use ash::vk;
-
-use std::convert::TryFrom;
-use std::ptr;
+use crate::{
+    buffers::{index_buffer::IndexBuffer, vertex_buffer::VertexBuffer},
+    devices::queues::{QueueFamilyIndices, QueueMap, QueueType},
+    graphics_pipeline::GraphicsPipeline,
+    models::index,
+    presentation::swap_chain::SwapChainContainer,
+    uniforms::descriptors::DescriptorData,
+    util::result::{Result, VulkanError},
+};
+use ash::{version::DeviceV1_0, vk};
+use std::{convert::TryFrom, ptr};
 
 pub fn create_command_pool(
     logical_device: &ash::Device,
@@ -155,7 +153,7 @@ pub fn create_command_buffers(
                 command_buffers[i],
                 index_buffer.data.buffer,
                 0,
-                vk::IndexType::UINT16,
+                index::INDEX_TYPE_VK_TYPE,
             );
 
             if i >= descriptor_data.descriptor_sets.len() {

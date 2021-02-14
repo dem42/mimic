@@ -1,9 +1,12 @@
-use crate::devices::queues::QueueMap;
-use crate::drawing::command_buffers::{begin_single_time_commands, end_single_time_commands};
-use crate::util::result::{Result, VulkanError};
-
-use ash::version::{DeviceV1_0, InstanceV1_0};
-use ash::vk;
+use crate::{
+    devices::queues::QueueMap,
+    drawing::command_buffers::{begin_single_time_commands, end_single_time_commands},
+    util::result::{Result, VulkanError},
+};
+use ash::{
+    version::{DeviceV1_0, InstanceV1_0},
+    vk,
+};
 use std::convert::TryFrom;
 
 pub trait MemoryCopyable {
@@ -29,9 +32,7 @@ pub fn copy_buffer(
         logical_device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &copy_regions);
     }
 
-    end_single_time_commands(command_buffer, logical_device, queues, command_pool)?;
-
-    Ok(())
+    end_single_time_commands(command_buffer, logical_device, queues, command_pool)
 }
 
 pub fn create_device_memory(

@@ -1,6 +1,9 @@
 use crate::{
-    depth::helpers::find_depth_format, devices::queues::QueueMap,
-    presentation::swap_chain::SwapChainContainer, textures::images::Image, util::result::Result,
+    depth::helpers::find_depth_format,
+    devices::queues::QueueMap,
+    presentation::swap_chain::SwapChainContainer,
+    textures::images::{Image, MipmapParam},
+    util::result::Result,
 };
 use ash::{version::DeviceV1_0, vk};
 
@@ -23,6 +26,7 @@ impl DepthResource {
         let mut depth_image = Image::new(
             swap_chain_container.swap_chain_extent.width,
             swap_chain_container.swap_chain_extent.height,
+            MipmapParam::NoMipmap,
             depth_format,
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,

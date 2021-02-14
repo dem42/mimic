@@ -1,7 +1,7 @@
 use ash::vk;
 use image::ImageError;
-use std::num::TryFromIntError;
-use std::str::Utf8Error;
+use std::{num::TryFromIntError, str::Utf8Error};
+use tobj::LoadError;
 
 use thiserror::Error;
 
@@ -19,6 +19,8 @@ pub enum VulkanError {
     DescriptorSetNotAvailable(usize),
     #[error("Image layout transition not supported: {0}")]
     ImageLayoutTransitionNotSupported(String),
+    #[error("Linear blit not supported. Another way is needed to generate mipmaps")]
+    ImageLinearBlittingNotSupported,
     #[error("Failed to create logical device")]
     LogicalDeviceCreateError,
     // memory
@@ -56,6 +58,8 @@ pub enum VulkanError {
     // fallback errors
     #[error(transparent)]
     ImageError(#[from] ImageError),
+    #[error(transparent)]
+    ObjError(#[from] LoadError),
     #[error(transparent)]
     OtherVkResult(#[from] vk::Result),
     #[error(transparent)]

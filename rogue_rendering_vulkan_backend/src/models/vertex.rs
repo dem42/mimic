@@ -1,6 +1,4 @@
-use crate::buffers::memory::MemoryCopyable;
-use crate::util::result::Result;
-
+use crate::{buffers::memory::MemoryCopyable, util::result::Result};
 use ash::vk;
 use memoffset::offset_of;
 use std::convert::TryFrom;

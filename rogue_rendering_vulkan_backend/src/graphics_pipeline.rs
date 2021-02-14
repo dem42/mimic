@@ -2,8 +2,8 @@ pub mod render_pass;
 pub mod shader_module;
 
 use crate::{
-    buffers::vertex::Vertex,
     graphics_pipeline::{render_pass::create_render_pass, shader_module::create_shader_module},
+    models::vertex::Vertex,
     presentation::swap_chain::SwapChainContainer,
     util::result::{Result, VulkanError},
 };
@@ -126,7 +126,9 @@ impl GraphicsPipeline {
             polygon_mode: vk::PolygonMode::FILL,
             line_width: 1.0f32,
             cull_mode: vk::CullModeFlags::BACK,
-            front_face: vk::FrontFace::CLOCKWISE,
+            // TODO
+            // front_face value depends a lot on what model we are trying to show
+            front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             depth_bias_enable: vk::FALSE,
             ..Default::default()
         };

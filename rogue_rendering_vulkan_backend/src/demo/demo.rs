@@ -11,6 +11,7 @@ use rogue_rendering_vulkan_backend::{
     },
     drawing::{command_buffers, framebuffers, synchronization::SynchronizationContainer},
     graphics_pipeline::GraphicsPipeline,
+    models::textured_model::{Mesh, MeshLoadingFlags},
     presentation::{
         image_views::ImageViews,
         swap_chain::{SwapChainContainer, SwapChainSupportDetails},
@@ -76,6 +77,7 @@ struct VulkanApp {
     depth_resource: DepthResource,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
+    model: Mesh,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     descriptor_data: DescriptorData,
@@ -140,7 +142,7 @@ impl VulkanApp {
         let queues = QueueMap::new(&queue_indices, &logical_device).expect("Failed to get queues");
 
         let texture_image = TextureImage::new(
-            "rogue_rendering_vulkan_backend/textures/texture.jpg",
+            "rogue_rendering_vulkan_backend/textures/viking_room.png",
             &instance,
             physical_device,
             &logical_device,
@@ -150,7 +152,14 @@ impl VulkanApp {
         )
         .expect("Failed to create texture image");
 
+        let model = Mesh::new(
+            "rogue_rendering_vulkan_backend/models/viking_room.obj",
+            MeshLoadingFlags::INVERTED_UP,
+        )
+        .expect("Failed to load model");
+
         let vertex_buffer = VertexBuffer::new(
+            &model.vertices,
             &instance,
             physical_device,
             &logical_device,
@@ -160,6 +169,7 @@ impl VulkanApp {
         .expect("Failed to create vertex buffer");
 
         let index_buffer = IndexBuffer::new(
+            &model.indices,
             &instance,
             physical_device,
             &logical_device,
@@ -213,6 +223,7 @@ impl VulkanApp {
             depth_resource,
             framebuffers,
             command_pool,
+            model,
             vertex_buffer,
             index_buffer,
             uniform_buffers,
@@ -526,17 +537,15 @@ impl VulkanApp {
     }
 
     fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
-        let angle_rad = apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
-        let model = glm::rotate(
-            &glm::Mat4::identity(),
-            angle_rad,
-            &glm::Vec3::new(0., 1., 0.),
-        );
+        let angle_rad = 0.0; //apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
+                             // our models for some reason are rotated such that up is z instead of y
+        let up_vector = glm::Vec3::new(0., 0., 1.);
+        let model = glm::rotate(&glm::Mat4::identity(), angle_rad, &up_vector);
 
         let view = glm::look_at(
             &glm::Vec3::new(2., 2., 2.),
             &glm::Vec3::new(0., 0., 0.),
-            &glm::Vec3::new(0., 1., 0.),
+            &up_vector,
         );
 
         let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32
