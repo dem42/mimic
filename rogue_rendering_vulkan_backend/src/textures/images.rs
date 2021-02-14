@@ -35,7 +35,7 @@ impl MemoryCopyable for [u8] {
 #[derive(Debug)]
 pub enum MipmapParam {
     NoMipmap,
-    UseMipmap,
+    UseRuntimeMipmap,
 }
 
 impl Image {
@@ -43,6 +43,7 @@ impl Image {
         width: u32,
         height: u32,
         mipmap_param: MipmapParam,
+        num_samples: vk::SampleCountFlags,
         format: vk::Format,
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
@@ -53,7 +54,7 @@ impl Image {
     ) -> Result<Self> {
         // number of mip level = how many times we can scale the image down by a half
         let mip_levels = match mipmap_param {
-            MipmapParam::UseMipmap => ((max(width, height) as f32).log2().floor() as u32) + 1,
+            MipmapParam::UseRuntimeMipmap => ((max(width, height) as f32).log2().floor() as u32) + 1,
             MipmapParam::NoMipmap => 1,
         };
 
@@ -71,7 +72,7 @@ impl Image {
             initial_layout: vk::ImageLayout::UNDEFINED,
             usage,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
-            samples: vk::SampleCountFlags::TYPE_1,
+            samples: num_samples,
             ..Default::default()
         };
 
@@ -320,7 +321,8 @@ impl TextureImage {
         let mut texture_image = Image::new(
             width,
             height,
-            MipmapParam::UseMipmap,
+            MipmapParam::UseRuntimeMipmap,
+            vk::SampleCountFlags::TYPE_1,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageTiling::OPTIMAL,
             // the image has the usage

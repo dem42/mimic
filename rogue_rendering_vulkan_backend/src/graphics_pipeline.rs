@@ -40,6 +40,7 @@ impl GraphicsPipeline {
         physical_device: vk::PhysicalDevice,
         swap_chain_container: &SwapChainContainer,
         uniform_descriptors: &vk::DescriptorSetLayout,
+        msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
         let vert_shader = create_shader_module(
             Path::new("rogue_rendering_vulkan_backend/shaders/spv/simple_triangle.vert.spv"),
@@ -135,7 +136,7 @@ impl GraphicsPipeline {
 
         let multisampling_create_info = vk::PipelineMultisampleStateCreateInfo {
             sample_shading_enable: vk::FALSE,
-            rasterization_samples: vk::SampleCountFlags::TYPE_1,
+            rasterization_samples: msaa_samples,
             ..Default::default()
         };
 
@@ -181,6 +182,7 @@ impl GraphicsPipeline {
             logical_device,
             physical_device,
             swap_chain_container,
+            msaa_samples,
         )?;
 
         let pipeline_layout =

@@ -11,3 +11,14 @@ you can use
 > vulkaninfo 
 ```
 to see your layers
+
+## TODO
+Need to add support for
+- Push constants
+- Instanced rendering
+- Dynamic uniforms
+- Separate images and sampler descriptors
+- Pipeline cache
+- Multi-threaded command buffer generation
+- Multiple subpasses
+- Compute shaders

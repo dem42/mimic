@@ -9,29 +9,44 @@ pub fn create_render_pass(
     logical_device: &ash::Device,
     physical_device: vk::PhysicalDevice,
     swap_chain_container: &SwapChainContainer,
+    msaa_samples: vk::SampleCountFlags,
 ) -> Result<vk::RenderPass> {
     // setup the descriptions for the attachments used by the render pass
     let color_attachment = vk::AttachmentDescription {
         format: swap_chain_container.swap_chain_format.format,
-        samples: vk::SampleCountFlags::TYPE_1,
+        samples: msaa_samples,
         load_op: vk::AttachmentLoadOp::CLEAR,
         store_op: vk::AttachmentStoreOp::STORE,
         stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
         stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
         initial_layout: vk::ImageLayout::UNDEFINED,
-        final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+        // our final layout isn't present because we are using MSAA and so the color attachment
+        // cannot be present immediately. first it must be resolved
+        final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         ..Default::default()
     };
 
     let depth_attachment = vk::AttachmentDescription {
         format: helpers::find_depth_format(instance, physical_device)?,
-        samples: vk::SampleCountFlags::TYPE_1,
+        samples: msaa_samples,
         load_op: vk::AttachmentLoadOp::CLEAR,
         store_op: vk::AttachmentStoreOp::DONT_CARE,
         stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
         stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
         initial_layout: vk::ImageLayout::UNDEFINED,
         final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        ..Default::default()
+    };
+
+    let color_attachment_resolve = vk::AttachmentDescription {
+        format: swap_chain_container.swap_chain_format.format,
+        samples: vk::SampleCountFlags::TYPE_1,
+        load_op: vk::AttachmentLoadOp::DONT_CARE,
+        store_op: vk::AttachmentStoreOp::STORE,
+        stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+        stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+        initial_layout: vk::ImageLayout::UNDEFINED,
+        final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
         ..Default::default()
     };
 
@@ -50,6 +65,12 @@ pub fn create_render_pass(
         ..Default::default()
     };
 
+    let color_attachment_resolve_ref = vk::AttachmentReference {
+        attachment: 2,
+        layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        ..Default::default()
+    };
+
     // note that if p_color_attachemnts is an array
     // then the index of the attachment in this array is referenced directly in
     // layout(location = 0) out vec4 color
@@ -59,6 +80,8 @@ pub fn create_render_pass(
         color_attachment_count: 1,
         p_color_attachments: &color_attachment_ref,
         p_depth_stencil_attachment: &depth_attachment_ref,
+        // pointing to the resolve attachment ref is enough to tell the graphics subpass to do a resolve operation
+        p_resolve_attachments: &color_attachment_resolve_ref,
         ..Default::default()
     };
 
@@ -84,7 +107,8 @@ pub fn create_render_pass(
         ..Default::default()
     };
 
-    let attachments = [color_attachment, depth_attachment];
+    // the indices of the attachments in this array is what we use as the "attachment" field in the attachement refs
+    let attachments = [color_attachment, depth_attachment, color_attachment_resolve];
     let attachment_count = u32::try_from(attachments.len())?;
     let render_pass_create_info = vk::RenderPassCreateInfo {
         attachment_count,

@@ -7,6 +7,7 @@ pub mod depth;
 pub mod devices;
 pub mod drawing;
 pub mod graphics_pipeline;
+pub mod msaa;
 pub mod models;
 pub mod presentation;
 pub mod textures;

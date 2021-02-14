@@ -1,8 +1,4 @@
-use crate::{
-    graphics_pipeline::GraphicsPipeline,
-    presentation::{image_views::ImageViews, swap_chain::SwapChainContainer},
-    util::result::Result,
-};
+use crate::{graphics_pipeline::GraphicsPipeline, msaa::multisampling::ColorResource, presentation::{image_views::ImageViews, swap_chain::SwapChainContainer}, util::result::Result};
 use ash::{version::DeviceV1_0, vk};
 use std::convert::TryFrom;
 
@@ -11,6 +7,7 @@ pub fn create_framebuffers(
     graphics_pipeline: &GraphicsPipeline,
     image_views: &ImageViews,
     depth_image_view: vk::ImageView,
+    color_resource: &ColorResource,
     swap_chain_container: &SwapChainContainer,
 ) -> Result<Vec<vk::Framebuffer>> {
     let mut framebuffers = Vec::with_capacity(image_views.image_views.len());
@@ -18,7 +15,7 @@ pub fn create_framebuffers(
         // the color attachment is different for every swap chain image
         // but the depth attachment can be the same since we only have one subpass running at a time (due to semaphores)
         // and only the subpass reads/writes to the depth attachment
-        let attachments = [*image_view, depth_image_view];
+        let attachments = [color_resource.view, depth_image_view, *image_view];
         let attachment_count = u32::try_from(attachments.len())?;
 
         let framebuffer_create_info = vk::FramebufferCreateInfo {

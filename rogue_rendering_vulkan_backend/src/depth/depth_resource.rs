@@ -15,6 +15,7 @@ pub struct DepthResource {
 
 impl DepthResource {
     pub fn new(
+        msaa_samples: vk::SampleCountFlags,
         instance: &ash::Instance,
         logical_device: &ash::Device,
         physical_device: vk::PhysicalDevice,
@@ -27,6 +28,7 @@ impl DepthResource {
             swap_chain_container.swap_chain_extent.width,
             swap_chain_container.swap_chain_extent.height,
             MipmapParam::NoMipmap,
+            msaa_samples,
             depth_format,
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,

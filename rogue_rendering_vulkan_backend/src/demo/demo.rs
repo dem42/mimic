@@ -1,31 +1,20 @@
 use nalgebra_glm as glm;
 
-use rogue_rendering_vulkan_backend::{
-    buffers::{buffer::Buffer, index_buffer::IndexBuffer, memory, vertex_buffer::VertexBuffer},
-    depth::depth_resource::DepthResource,
-    devices::{
+use rogue_rendering_vulkan_backend::{buffers::{buffer::Buffer, index_buffer::IndexBuffer, memory, vertex_buffer::VertexBuffer}, depth::depth_resource::DepthResource, devices::{
         logical_device::create_logical_device,
         physical_device::{get_physical_device_properties, pick_physical_device},
         queues::{QueueFamilyIndices, QueueMap, QueueType},
         requirements::DeviceRequirements,
-    },
-    drawing::{command_buffers, framebuffers, synchronization::SynchronizationContainer},
-    graphics_pipeline::GraphicsPipeline,
-    models::textured_model::{Mesh, MeshLoadingFlags},
-    presentation::{
+    }, drawing::{command_buffers, framebuffers, synchronization::SynchronizationContainer}, graphics_pipeline::GraphicsPipeline, models::textured_model::{Mesh, MeshLoadingFlags}, msaa::{multisampling::ColorResource, util::get_max_sample_count}, presentation::{
         image_views::ImageViews,
         swap_chain::{SwapChainContainer, SwapChainSupportDetails},
-    },
-    textures::images::TextureImage,
-    uniforms::{self, descriptors::DescriptorData},
-    util::{
+    }, textures::images::TextureImage, uniforms::{self, descriptors::DescriptorData}, util::{
         self,
         debug::VulkanDebug,
         platform::SurfaceContainer,
         result::{Result, VulkanError},
         validation::VulkanValidation,
-    },
-};
+    }};
 
 use rustylog::{log, Log};
 use rustyutil::apptime::AppTime;
@@ -60,6 +49,18 @@ fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFe
     physical_device_featrues.sampler_anisotropy == vk::TRUE
 }
 
+struct SwapChainDependentFields {
+    swap_chain_container: SwapChainContainer,
+    image_views_container: ImageViews,
+    graphics_pipeline: GraphicsPipeline,
+    color_resource: ColorResource,
+    depth_resource: DepthResource,
+    framebuffers: Vec<vk::Framebuffer>,
+    descriptor_data: DescriptorData,
+    uniform_buffers: Vec<Buffer>,
+    command_buffers: Vec<vk::CommandBuffer>,
+}
+
 struct VulkanApp {
     _entry: ash::Entry,
     instance: ash::Instance,
@@ -70,21 +71,15 @@ struct VulkanApp {
     logical_device: ash::Device,
     queue_indices: QueueFamilyIndices,
     queues: QueueMap,
-    swap_chain_container: SwapChainContainer,
-    image_views_container: ImageViews,
-    uniform_descriptors: vk::DescriptorSetLayout,
-    graphics_pipeline: GraphicsPipeline,
-    depth_resource: DepthResource,
-    framebuffers: Vec<vk::Framebuffer>,
+    dependent_fields: SwapChainDependentFields,
+    uniform_descriptors: vk::DescriptorSetLayout,    
     command_pool: vk::CommandPool,
-    model: Mesh,
+    _model: Mesh,
     vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,
-    descriptor_data: DescriptorData,
-    uniform_buffers: Vec<Buffer>,
-    command_buffers: Vec<vk::CommandBuffer>,
+    index_buffer: IndexBuffer,    
     sync_container: SynchronizationContainer,
     texture_image: TextureImage,
+    msaa_samples: vk::SampleCountFlags,
     buffer_resized: bool,
     buffer_minimized: bool,
 }
@@ -116,6 +111,7 @@ impl VulkanApp {
             .expect("Failed to create physical device");
         let physical_device_properties = get_physical_device_properties(&instance, physical_device)
             .expect("Failed to get physical device properties");
+        let msaa_samples = get_max_sample_count(physical_device_properties);
         // create logical device and queues
         let queue_indices = QueueFamilyIndices::find(
             &instance,
@@ -182,16 +178,7 @@ impl VulkanApp {
             uniforms::descriptors::create_descriptor_set_layout(&logical_device)
                 .expect("Failed to create uniform descriptor set layout");
 
-        let (
-            swap_chain_container,
-            image_views_container,
-            graphics_pipeline,
-            depth_resource,
-            framebuffers,
-            uniform_buffers,
-            descriptor_data,
-            command_buffers,
-        ) = Self::create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
+        let dependent_fields = Self::create_swapchain_dependent_fields(
             &instance,
             physical_device,
             &logical_device,
@@ -204,6 +191,7 @@ impl VulkanApp {
             &uniform_descriptors,
             &texture_image,
             &window,
+            msaa_samples,
         );
 
         let result = Self {
@@ -216,21 +204,15 @@ impl VulkanApp {
             logical_device,
             queue_indices,
             queues,
-            swap_chain_container,
-            image_views_container,
+            dependent_fields,
             uniform_descriptors,
-            graphics_pipeline,
-            depth_resource,
-            framebuffers,
             command_pool,
-            model,
+            _model: model,
             vertex_buffer,
             index_buffer,
-            uniform_buffers,
-            descriptor_data,
-            command_buffers,
             sync_container,
             texture_image,
+            msaa_samples,
             buffer_resized: false,
             buffer_minimized: false,
         };
@@ -238,7 +220,7 @@ impl VulkanApp {
         result
     }
 
-    pub fn create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
+    pub fn create_swapchain_dependent_fields(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -251,16 +233,8 @@ impl VulkanApp {
         uniform_descriptors: &vk::DescriptorSetLayout,
         texture_image: &TextureImage,
         window: &Window,
-    ) -> (
-        SwapChainContainer,
-        ImageViews,
-        GraphicsPipeline,
-        DepthResource,
-        Vec<vk::Framebuffer>,
-        Vec<Buffer>,
-        DescriptorData,
-        Vec<vk::CommandBuffer>,
-    ) {
+        msaa_samples: vk::SampleCountFlags,      
+    ) -> SwapChainDependentFields {
         let swap_chain_container = SwapChainContainer::new(
             instance,
             physical_device,
@@ -280,10 +254,20 @@ impl VulkanApp {
             physical_device,
             &swap_chain_container,
             uniform_descriptors,
+            msaa_samples,
         )
         .expect("Failed to create graphics pipeline");
 
+        let color_resource = ColorResource::new(
+            msaa_samples,
+            instance,
+            logical_device,
+            physical_device,
+            &swap_chain_container,
+        ).expect("Failed to create a color resource that is to be used for MSAA");
+
         let depth_resource = DepthResource::new(
+            msaa_samples,
             instance,
             logical_device,
             physical_device,
@@ -298,6 +282,7 @@ impl VulkanApp {
             &graphics_pipeline,
             &image_views_container,
             depth_resource.depth_image_view,
+            &color_resource,
             &swap_chain_container,
         )
         .expect("Failed to create framebuffers");
@@ -332,16 +317,17 @@ impl VulkanApp {
         )
         .expect("Failed to create command buffers");
 
-        (
+        SwapChainDependentFields {
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
+            color_resource,
             depth_resource,
             framebuffers,
             uniform_buffers,
             descriptor_data,
             command_buffers,
-        )
+        }
     }
 
     pub fn recreate_swap_chain(&mut self, window: &Window) -> Result<()> {
@@ -350,16 +336,7 @@ impl VulkanApp {
             self.cleanup_swap_chain();
         }
 
-        let (
-            swap_chain_container,
-            image_views_container,
-            graphics_pipeline,
-            depth_resource,
-            framebuffers,
-            uniform_buffers,
-            descriptor_data,
-            command_buffers,
-        ) = Self::create_swapchain_graphics_pipeline_framebuffers_and_command_buffers(
+        self.dependent_fields = Self::create_swapchain_dependent_fields(
             &self.instance,
             self.physical_device,
             &self.logical_device,
@@ -372,16 +349,8 @@ impl VulkanApp {
             &self.uniform_descriptors,
             &self.texture_image,
             window,
+            self.msaa_samples,
         );
-
-        self.swap_chain_container = swap_chain_container;
-        self.image_views_container = image_views_container;
-        self.graphics_pipeline = graphics_pipeline;
-        self.depth_resource = depth_resource;
-        self.framebuffers = framebuffers;
-        self.uniform_buffers = uniform_buffers;
-        self.descriptor_data = descriptor_data;
-        self.command_buffers = command_buffers;
 
         Ok(())
     }
@@ -429,10 +398,10 @@ impl VulkanApp {
         // get an available image from the swapchain
         let timeout = u64::MAX;
         let acquire_result = unsafe {
-            self.swap_chain_container
+            self.dependent_fields.swap_chain_container
                 .swap_chain_loader
                 .acquire_next_image(
-                    self.swap_chain_container.swap_chain,
+                    self.dependent_fields.swap_chain_container.swap_chain,
                     timeout,
                     self.sync_container.get_image_available_semaphore(),
                     vk::Fence::null(),
@@ -476,8 +445,8 @@ impl VulkanApp {
             .map(|_x| vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .collect();
 
-        let command_buffer_ptr = if !self.command_buffers.is_empty() {
-            &self.command_buffers[available_image_index]
+        let command_buffer_ptr = if !self.dependent_fields.command_buffers.is_empty() {
+            &self.dependent_fields.command_buffers[available_image_index]
         } else {
             return Err(VulkanError::CommandBufferNotAvailable(
                 available_image_index,
@@ -510,7 +479,7 @@ impl VulkanApp {
         }
 
         // present the image to swap chain
-        let swap_chains = [self.swap_chain_container.swap_chain];
+        let swap_chains = [self.dependent_fields.swap_chain_container.swap_chain];
         let swap_chain_count = u32::try_from(swap_chains.len())?;
         let present_info = vk::PresentInfoKHR {
             wait_semaphore_count: signal_semaphores_count,
@@ -523,7 +492,7 @@ impl VulkanApp {
 
         let present_queue = self.queues.get_present_queue()?;
         let present_result = unsafe {
-            self.swap_chain_container
+            self.dependent_fields.swap_chain_container
                 .swap_chain_loader
                 .queue_present(present_queue, &present_info)
         };
@@ -548,16 +517,16 @@ impl VulkanApp {
             &up_vector,
         );
 
-        let aspect_ratio = self.swap_chain_container.swap_chain_extent.width as f32
-            / self.swap_chain_container.swap_chain_extent.height as f32;
+        let aspect_ratio = self.dependent_fields.swap_chain_container.swap_chain_extent.width as f32
+            / self.dependent_fields.swap_chain_container.swap_chain_extent.height as f32;
 
         // applying some corrections here because this calculation is for opengl
         // and we have vulkan where in ndc coords the y axis points down
         // also it doesn't use reverse depth
         let mut proj = glm::perspective_fov_rh_zo(
             45.0 * std::f32::consts::PI / 180.0,
-            self.swap_chain_container.swap_chain_extent.width as f32,
-            self.swap_chain_container.swap_chain_extent.height as f32,
+            self.dependent_fields.swap_chain_container.swap_chain_extent.width as f32,
+            self.dependent_fields.swap_chain_container.swap_chain_extent.height as f32,
             0.1,
             10.0,
         );
@@ -610,14 +579,14 @@ impl VulkanApp {
             proj,
         }];
 
-        if image_index >= self.uniform_buffers.len() {
+        if image_index >= self.dependent_fields.uniform_buffers.len() {
             return Err(VulkanError::UniformBufferNotAvailable(image_index));
         }
 
         unsafe {
             memory::fill_buffer(
                 &self.logical_device,
-                self.uniform_buffers[image_index].memory,
+                self.dependent_fields.uniform_buffers[image_index].memory,
                 &ubos,
             )?;
         }
@@ -680,39 +649,40 @@ impl VulkanApp {
     }
 
     unsafe fn cleanup_swap_chain(&mut self) {
-        std::mem::take(&mut self.depth_resource).drop(&self.logical_device);
+        std::mem::take(&mut self.dependent_fields.color_resource).drop(&self.logical_device);
+        std::mem::take(&mut self.dependent_fields.depth_resource).drop(&self.logical_device);
 
-        for framebuffer in self.framebuffers.iter() {
+        for framebuffer in self.dependent_fields.framebuffers.iter() {
             self.logical_device.destroy_framebuffer(*framebuffer, None);
         }
 
         // the descriptor sets are cleared automatically when the pool is cleared
         self.logical_device
-            .destroy_descriptor_pool(self.descriptor_data.descriptor_pool, None);
+            .destroy_descriptor_pool(self.dependent_fields.descriptor_data.descriptor_pool, None);
 
-        for uniform_buffer in self.uniform_buffers.iter() {
+        for uniform_buffer in self.dependent_fields.uniform_buffers.iter() {
             self.logical_device
                 .destroy_buffer(uniform_buffer.buffer, None);
             self.logical_device.free_memory(uniform_buffer.memory, None);
         }
 
         self.logical_device
-            .free_command_buffers(self.command_pool, &self.command_buffers);
+            .free_command_buffers(self.command_pool, &self.dependent_fields.command_buffers);
 
         self.logical_device
-            .destroy_pipeline(self.graphics_pipeline.pipeline, None);
+            .destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
         self.logical_device
-            .destroy_pipeline_layout(self.graphics_pipeline.pipeline_layout, None);
+            .destroy_pipeline_layout(self.dependent_fields.graphics_pipeline.pipeline_layout, None);
 
         self.logical_device
-            .destroy_render_pass(self.graphics_pipeline.render_pass, None);
+            .destroy_render_pass(self.dependent_fields.graphics_pipeline.render_pass, None);
 
-        for &image_view in &self.image_views_container.image_views {
+        for &image_view in &self.dependent_fields.image_views_container.image_views {
             self.logical_device.destroy_image_view(image_view, None);
         }
-        self.swap_chain_container
+        self.dependent_fields.swap_chain_container
             .swap_chain_loader
-            .destroy_swapchain(self.swap_chain_container.swap_chain, None);
+            .destroy_swapchain(self.dependent_fields.swap_chain_container.swap_chain, None);
     }
 }
 
