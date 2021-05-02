@@ -1,0 +1,16 @@
+[package]
+name = "mimic_frontend"
+version = "0.1.0"
+authors = ["martin <martin.papanek@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[dependencies.rustyutil]
+path = "../mimic_vulkan_backend"
+
+[[examples]]
+name = "demo"
+path = "examples/demo.rs"
