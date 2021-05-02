@@ -7,7 +7,9 @@ At the moment the repostitory contains the basic setup of a Vulkan rendering bac
 TODO: A rendering frontend based on the render graph concept
 
 ## How to run
-With logging and backtrace
+to run the example in mimic_frontend (not the bin in mimic_vulkan_backend) 
+
+With logging and backtrace 
 ```
-$env:RUST_BACKTRACE = 1; $env:RUST_LOG = "info"; cargo run --bin demo
+$env:RUST_BACKTRACE = 1; $env:RUST_LOG = "info"; cargo run --example demo
 ```

@@ -2,5 +2,6 @@
 members = [
     "mimic",
     "rustyutil",
+    "mimic_frontend",
     "mimic_vulkan_backend",
 ]

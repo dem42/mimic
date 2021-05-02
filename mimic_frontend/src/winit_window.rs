@@ -1,8 +1,7 @@
-use crate::util::result::{Result, VulkanError};
-
-use crate::window::window::{WindowSize, WindowSurface};
-use core::ffi::c_void;
-use std::ptr;
+use mimic_vulkan_backend::{
+    util::result::{Result, VulkanError},
+    window::{WindowSize, WindowSurface},
+};
 
 pub fn get_window_size_from_winit(winit_window: &winit::window::Window) -> Result<WindowSize> {
     if let Some(current_monitor) = winit_window.current_monitor() {
@@ -39,9 +38,8 @@ pub fn get_window_surface_from_winit(winit_window: &winit::window::Window) -> Re
     };
     #[cfg(target_os = "windows")]
     let surface = {            
-        use winapi::um::libloaderapi::GetModuleHandleW;
         use winit::platform::windows::WindowExtWindows;
-        let hinstance = unsafe { GetModuleHandleW(ptr::null()) as *const c_void };
+        let hinstance = winit_window.hinstance();
         let hwnd = winit_window.hwnd();
         WindowSurface::WindowsSurface {
             hinstance,

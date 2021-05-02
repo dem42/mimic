@@ -1,6 +1,7 @@
 extern crate memoffset;
 extern crate nalgebra_glm as glm;
 
+pub mod backend;
 pub mod buffers;
 pub mod depth;
 pub mod devices;

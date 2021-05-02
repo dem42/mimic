@@ -1,0 +1,96 @@
+use crate::winit_window;
+
+use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
+
+use rustyutil::apptime::AppTime;
+
+use log::{error, info};
+
+use winit::{
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+};
+
+pub struct MainLoop;
+
+impl MainLoop {
+
+    pub fn init_window(window_title: &str, window_width: u32, window_height: u32, event_loop: &EventLoop<()>) -> winit::window::Window {
+        winit::window::WindowBuilder::new()
+            .with_title(window_title)
+            .with_inner_size(winit::dpi::LogicalSize::new(window_width, window_height))
+            .build(event_loop)
+            .expect("Failed to create window.")
+    }
+
+    pub fn run(
+        mut vulkan_app: VulkanApp,
+        event_loop: EventLoop<()>,
+        window: winit::window::Window,
+        mut apptime: AppTime,
+    ) {
+        event_loop.run(move |event, _, control_flow| match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => {
+                    Self::exit(control_flow);
+                }
+                WindowEvent::KeyboardInput { input, .. } => match input {
+                    KeyboardInput {
+                        virtual_keycode,
+                        state,
+                        ..
+                    } => match (virtual_keycode, state) {
+                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                            Self::exit(control_flow);
+                        }
+                        _ => {}
+                    },
+                },
+                WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
+                    info!("Window was resized");
+                    vulkan_app.buffer_resized = true;
+                    if width == 0 || height == 0 {
+                        info!("Window was minimized");
+                        vulkan_app.buffer_minimized = true;
+                    } else {
+                        vulkan_app.buffer_minimized = false;
+                    }
+                }
+                _ => {}
+            },
+            Event::MainEventsCleared => {
+                window.request_redraw();
+            }
+            Event::RedrawRequested(_window_id) => {
+                let time_update_result = apptime.update();
+                if let Err(error) = time_update_result {
+                    error!("Failed to update app time: {}", error);
+                }
+
+                if let Ok(window_size) = winit_window::get_window_size_from_winit(&window) {
+                    let frame_result = vulkan_app.draw_frame(&window_size, &apptime);
+                    if let Err(error) = frame_result {
+                        error!("Failed to draw frame: {}", error);
+                    }
+                } else {
+                    error!("Failed to draw frame due to window size being unavailable");
+                }
+            }
+            Event::LoopDestroyed => {
+                info!("In exit main loop");
+                let wait_result = vulkan_app.wait_until_device_idle();
+                if let Err(error) = wait_result {
+                    error!(
+                        "Failed while waiting until device idle: {}",
+                        error
+                    );
+                }
+            }
+            _ => {}
+        });
+    }
+
+    fn exit(control_flow: &mut ControlFlow) {
+        *control_flow = ControlFlow::Exit
+    }
+}
