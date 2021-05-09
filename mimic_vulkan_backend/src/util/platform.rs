@@ -55,8 +55,12 @@ pub fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
     window_surface: &WindowSurface,
 ) -> Result<vk::SurfaceKHR> {
     use std::ptr;
-    
-    let (x11_window, x11_display) = if let &WindowSurface::X11Surface { xlib_window, xlib_display } = window_surface {
+
+    let (x11_window, x11_display) = if let &WindowSurface::X11Surface {
+        xlib_window,
+        xlib_display,
+    } = window_surface
+    {
         (xlib_window, xlib_display)
     } else {
         return Err(VulkanError::WindowIncorrectPlatformSurface);
@@ -87,11 +91,12 @@ pub fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
     use std::os::raw::c_void;
     use std::ptr;
 
-    let (ns_window, ns_view) = if let &WindowSurface::MacOSSurface { ns_window, ns_view } = window_surface {
-        (ns_window, ns_view)
-    } else {
-        return Err(VulkanError::WindowIncorrectPlatformSurface);
-    };
+    let (ns_window, ns_view) =
+        if let &WindowSurface::MacOSSurface { ns_window, ns_view } = window_surface {
+            (ns_window, ns_view)
+        } else {
+            return Err(VulkanError::WindowIncorrectPlatformSurface);
+        };
 
     let wnd: cocoa_id = mem::transmute(ns_window);
 

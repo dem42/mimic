@@ -66,11 +66,7 @@ impl Mesh {
                 }
             }
         }
-        info!(
-            "Model \"{}\" loaded. Vertices: {}",
-            filepath,
-            idx_cnt
-        );
+        info!("Model \"{}\" loaded. Vertices: {}", filepath, idx_cnt);
         Ok(Self { vertices, indices })
     }
 }

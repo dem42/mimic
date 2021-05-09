@@ -91,10 +91,7 @@ impl QueueFamilyIndices {
             queue_family_index += 1;
         }
 
-        debug!(
-            "Found queue data points: {:?}",
-            queue_data_points
-        );
+        debug!("Found queue data points: {:?}", queue_data_points);
 
         let mut remaining_queue_types: HashSet<_> =
             requirements.required_queues.iter().copied().collect();

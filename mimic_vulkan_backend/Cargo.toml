@@ -24,6 +24,9 @@ path = "../rustyutil"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.5", features = ["windef", "libloaderapi"] }
 
+[build-dependencies]
+mimic_build_utils = { path = "../mimic_build_utils" }
+
 [[bin]]
 name = "demo"
 path = "src/demo/demo.rs"

@@ -1,4 +1,8 @@
-use crate::{presentation::swap_chain::SwapChainContainer, textures::images::{Image, MipmapParam}, util::result::Result};
+use crate::{
+    presentation::swap_chain::SwapChainContainer,
+    textures::images::{Image, MipmapParam},
+    util::result::Result,
+};
 use ash::{version::DeviceV1_0, vk};
 
 #[derive(Default)]
@@ -31,12 +35,10 @@ impl ColorResource {
             logical_device,
         )?;
 
-        let view = image.create_image_view(color_format, vk::ImageAspectFlags::COLOR, logical_device)?;
+        let view =
+            image.create_image_view(color_format, vk::ImageAspectFlags::COLOR, logical_device)?;
 
-        Ok(Self {
-            image,
-            view,
-        })
+        Ok(Self { image, view })
     }
 
     pub unsafe fn drop(self, logical_device: &ash::Device) {

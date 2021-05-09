@@ -1,21 +1,25 @@
 use crate::winit_window;
-
-use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
-
-use rustyutil::apptime::AppTime;
-
 use log::{error, info};
-
+use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
+use rustyutil::apptime::AppTime;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
+/// This struct represent the 3D renderer main loop.
+/// It sets up a window and runs the renderer within that window.
 pub struct MainLoop;
 
 impl MainLoop {
-
-    pub fn init_window(window_title: &str, window_width: u32, window_height: u32, event_loop: &EventLoop<()>) -> winit::window::Window {
+    /// Initialize a window with the given `window_tile` and the provided `window_width` and `window_height`. 
+    /// The provided `event_loop` is used to detect and react to window events.
+    pub fn init_window(
+        window_title: &str,
+        window_width: u32,
+        window_height: u32,
+        event_loop: &EventLoop<()>,
+    ) -> winit::window::Window {
         winit::window::WindowBuilder::new()
             .with_title(window_title)
             .with_inner_size(winit::dpi::LogicalSize::new(window_width, window_height))
@@ -23,6 +27,7 @@ impl MainLoop {
             .expect("Failed to create window.")
     }
 
+    /// Run the provided `vulkan_app` inside of the window.
     pub fn run(
         mut vulkan_app: VulkanApp,
         event_loop: EventLoop<()>,
@@ -48,12 +53,12 @@ impl MainLoop {
                 },
                 WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
                     info!("Window was resized");
-                    vulkan_app.buffer_resized = true;
+                    vulkan_app.window_resized = true;
                     if width == 0 || height == 0 {
                         info!("Window was minimized");
-                        vulkan_app.buffer_minimized = true;
+                        vulkan_app.window_minimized = true;
                     } else {
-                        vulkan_app.buffer_minimized = false;
+                        vulkan_app.window_minimized = false;
                     }
                 }
                 _ => {}
@@ -80,10 +85,7 @@ impl MainLoop {
                 info!("In exit main loop");
                 let wait_result = vulkan_app.wait_until_device_idle();
                 if let Err(error) = wait_result {
-                    error!(
-                        "Failed while waiting until device idle: {}",
-                        error
-                    );
+                    error!("Failed while waiting until device idle: {}", error);
                 }
             }
             _ => {}

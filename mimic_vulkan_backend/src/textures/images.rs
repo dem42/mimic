@@ -54,7 +54,9 @@ impl Image {
     ) -> Result<Self> {
         // number of mip level = how many times we can scale the image down by a half
         let mip_levels = match mipmap_param {
-            MipmapParam::UseRuntimeMipmap => ((max(width, height) as f32).log2().floor() as u32) + 1,
+            MipmapParam::UseRuntimeMipmap => {
+                ((max(width, height) as f32).log2().floor() as u32) + 1
+            }
             MipmapParam::NoMipmap => 1,
         };
 

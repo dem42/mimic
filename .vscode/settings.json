@@ -1,5 +1,8 @@
 {
     "rust-analyzer.inlayHints.enable": false,
     "rust-analyzer.inlayHints.parameterHints": false,
-    "rust-analyzer.lens.implementations": false
+    "rust-analyzer.lens.implementations": false,
+    "cSpell.enableFiletypes": [
+        "!rust"
+    ]
 }

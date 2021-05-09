@@ -1,4 +1,9 @@
-use crate::{graphics_pipeline::GraphicsPipeline, msaa::multisampling::ColorResource, presentation::{image_views::ImageViews, swap_chain::SwapChainContainer}, util::result::Result};
+use crate::{
+    graphics_pipeline::GraphicsPipeline,
+    msaa::multisampling::ColorResource,
+    presentation::{image_views::ImageViews, swap_chain::SwapChainContainer},
+    util::result::Result,
+};
 use ash::{version::DeviceV1_0, vk};
 use std::convert::TryFrom;
 

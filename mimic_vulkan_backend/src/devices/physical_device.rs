@@ -70,8 +70,7 @@ pub fn pick_physical_device(
     if let Some(best_suitable_phyiscal_device) = suitable_physical_devices.pop() {
         info!(
             "Best physical device: rating={}\n{}",
-            best_suitable_phyiscal_device.rating,
-            best_suitable_phyiscal_device.description
+            best_suitable_phyiscal_device.rating, best_suitable_phyiscal_device.description
         );
         Ok(best_suitable_phyiscal_device.physical_device)
     } else {

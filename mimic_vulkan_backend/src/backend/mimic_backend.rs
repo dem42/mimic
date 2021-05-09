@@ -1,30 +1,39 @@
-use nalgebra_glm as glm;
-
-use crate::{buffers::{buffer::Buffer, index_buffer::IndexBuffer, memory, vertex_buffer::VertexBuffer}, depth::depth_resource::DepthResource, devices::{
+use crate::{
+    buffers::{buffer::Buffer, index_buffer::IndexBuffer, memory, vertex_buffer::VertexBuffer},
+    depth::depth_resource::DepthResource,
+    devices::{
         logical_device::create_logical_device,
         physical_device::{get_physical_device_properties, pick_physical_device},
         queues::{QueueFamilyIndices, QueueMap, QueueType},
         requirements::DeviceRequirements,
-    }, drawing::{command_buffers, framebuffers, synchronization::SynchronizationContainer}, graphics_pipeline::GraphicsPipeline, models::textured_model::{Mesh, MeshLoadingFlags}, msaa::{multisampling::ColorResource, util::get_max_sample_count}, presentation::{
+    },
+    drawing::{command_buffers, framebuffers, synchronization::SynchronizationContainer},
+    graphics_pipeline::GraphicsPipeline,
+    models::textured_model::{Mesh, MeshLoadingFlags},
+    msaa::{multisampling::ColorResource, util::get_max_sample_count},
+    presentation::{
         image_views::ImageViews,
         swap_chain::{SwapChainContainer, SwapChainSupportDetails},
-    }, textures::images::TextureImage, uniforms::{self, descriptors::DescriptorData}, util::{
+    },
+    textures::images::TextureImage,
+    uniforms::{self, descriptors::DescriptorData},
+    util::{
         self,
         debug::VulkanDebug,
         platform::SurfaceContainer,
         result::{Result, VulkanError},
         validation::VulkanValidation,
-    }, window::{WindowSize, WindowSurface},
+    },
+    window::{WindowSize, WindowSurface},
 };
-
-use log::info;
-use rustyutil::apptime::AppTime;
-
 use ash::{
     prelude::VkResult,
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
+use log::info;
+use nalgebra_glm as glm;
+use rustyutil::apptime::AppTime;
 use std::{convert::TryFrom, ffi::CString, ptr};
 
 const REQUIRED_QUEUES: [QueueType; 2] = [
@@ -41,6 +50,9 @@ fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFe
     physical_device_featrues.sampler_anisotropy == vk::TRUE
 }
 
+/// This structure wraps all the objects that depend on the swap-chain in order to be able to recreate them when the swap-chain images change.
+/// Swap-chain is a series of framebuffers that can be drawn to and later presented to the graphics display.
+/// The purpose is to allow double buffering so that the framebuffer isn't being written to while it is presented.
 struct SwapChainDependentFields {
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
@@ -53,6 +65,8 @@ struct SwapChainDependentFields {
     command_buffers: Vec<vk::CommandBuffer>,
 }
 
+/// A structure that represents a vulkan application.
+/// It exposes fields and methods that make it possible to communicate with the vulkan graphics API
 pub struct VulkanApp {
     _entry: ash::Entry,
     instance: ash::Instance,
@@ -64,30 +78,42 @@ pub struct VulkanApp {
     queue_indices: QueueFamilyIndices,
     queues: QueueMap,
     dependent_fields: SwapChainDependentFields,
-    uniform_descriptors: vk::DescriptorSetLayout,    
+    uniform_descriptors: vk::DescriptorSetLayout,
     command_pool: vk::CommandPool,
     _model: Mesh,
     vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,    
+    index_buffer: IndexBuffer,
     sync_container: SynchronizationContainer,
     texture_image: TextureImage,
     msaa_samples: vk::SampleCountFlags,
-    pub buffer_resized: bool,
-    pub buffer_minimized: bool,
+    /// This field is used to determine whether the window was resized.
+    /// This is for example the case when the graphics display window was resized.
+    pub window_resized: bool,
+    /// This field is used to determine whether the display window was minimized.
+    /// When the window is minimized then nothing needs to be rendered.
+    pub window_minimized: bool,
 }
 
-pub enum ResizeDetectedLocation {
+/// This enum informs us during which part of the draw-frame process a window resize happened
+enum ResizeDetectedLocation {
     InAcquire,
     InPresent,
 }
 
 impl VulkanApp {
-    pub fn new(window_title: &str, engine_name: &str, window_surface: &WindowSurface, window_size: &WindowSize) -> Self {
+    /// Constructs a new `VulkanApp` with the provided window title and engine name.
+    // It creates a swap-chain using the `window_surface` and `window_size`.
+    pub fn new(
+        window_title: &str,
+        engine_name: &str,
+        window_surface: &WindowSurface,
+        window_size: &WindowSize,
+    ) -> Self {
         let entry = ash::Entry::new().unwrap();
         let validation = VulkanValidation::enabled(util::validation::ValidationOptions::Verbose);
         // creating the instance is equivalent to initializing the vulkan library
-        let instance =
-            Self::create_instance(window_title, engine_name, &entry, &validation).expect("Failed to create instance");
+        let instance = Self::create_instance(window_title, engine_name, &entry, &validation)
+            .expect("Failed to create instance");
         let debug = VulkanDebug::new(&entry, &instance, &validation);
         // creating a surface to present images to
         let surface_container = util::platform::create_surface(&entry, &instance, window_surface)
@@ -205,13 +231,14 @@ impl VulkanApp {
             sync_container,
             texture_image,
             msaa_samples,
-            buffer_resized: false,
-            buffer_minimized: false,
+            window_resized: false,
+            window_minimized: false,
         };
 
         result
     }
 
+    /// Swapchain dependent fields are the ones that we need to recreate for example anytime that the window size changes
     fn create_swapchain_dependent_fields(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
@@ -225,7 +252,7 @@ impl VulkanApp {
         uniform_descriptors: &vk::DescriptorSetLayout,
         texture_image: &TextureImage,
         window_size: &WindowSize,
-        msaa_samples: vk::SampleCountFlags,      
+        msaa_samples: vk::SampleCountFlags,
     ) -> SwapChainDependentFields {
         let swap_chain_container = SwapChainContainer::new(
             instance,
@@ -256,7 +283,8 @@ impl VulkanApp {
             logical_device,
             physical_device,
             &swap_chain_container,
-        ).expect("Failed to create a color resource that is to be used for MSAA");
+        )
+        .expect("Failed to create a color resource that is to be used for MSAA");
 
         let depth_resource = DepthResource::new(
             msaa_samples,
@@ -322,6 +350,8 @@ impl VulkanApp {
         }
     }
 
+    /// The swap-chain is a series of framebuffers that are to be presented to the graphics display.
+    /// If the display changes size, then we need to recreate it.
     pub fn recreate_swap_chain(&mut self, window_size: &WindowSize) -> Result<()> {
         unsafe {
             self.logical_device.device_wait_idle()?;
@@ -347,7 +377,10 @@ impl VulkanApp {
         Ok(())
     }
 
-    pub fn handle_resize<A>(
+    /// Check to see if we need to handle a resize of the display window.
+    /// Whether a resize needs to happen depends on what `location` in draw-frame the resize happened and on the result of
+    /// a vulkan operation which may signal that the swapchain is out of date
+    fn handle_resize<A>(
         &mut self,
         location: ResizeDetectedLocation,
         result: &VkResult<A>,
@@ -363,11 +396,11 @@ impl VulkanApp {
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => true,
                 Err(error) => return Err(VulkanError::from(*error)),
                 // if a window event signaled that a resize happened then we want to handle the resize after image present
-                Ok(_) => self.buffer_resized,
+                Ok(_) => self.window_resized,
             },
         };
         let resize_happened = if resize_needed {
-            self.buffer_resized = false;
+            self.window_resized = false;
             self.recreate_swap_chain(window_size)?;
             true
         } else {
@@ -376,8 +409,9 @@ impl VulkanApp {
         Ok(resize_happened)
     }
 
+    /// Goes through all the vulkan steps needed to render a frame.
     pub fn draw_frame(&mut self, window_size: &WindowSize, apptime: &AppTime) -> Result<()> {
-        if self.buffer_minimized {
+        if self.window_minimized {
             return Ok(());
         }
 
@@ -390,7 +424,8 @@ impl VulkanApp {
         // get an available image from the swapchain
         let timeout = u64::MAX;
         let acquire_result = unsafe {
-            self.dependent_fields.swap_chain_container
+            self.dependent_fields
+                .swap_chain_container
                 .swap_chain_loader
                 .acquire_next_image(
                     self.dependent_fields.swap_chain_container.swap_chain,
@@ -399,7 +434,11 @@ impl VulkanApp {
                     vk::Fence::null(),
                 )
         };
-        if self.handle_resize(ResizeDetectedLocation::InAcquire, &acquire_result, window_size)? {
+        if self.handle_resize(
+            ResizeDetectedLocation::InAcquire,
+            &acquire_result,
+            window_size,
+        )? {
             return Ok(());
         }
         let (available_image_index_u32, _) = acquire_result?;
@@ -484,19 +523,25 @@ impl VulkanApp {
 
         let present_queue = self.queues.get_present_queue()?;
         let present_result = unsafe {
-            self.dependent_fields.swap_chain_container
+            self.dependent_fields
+                .swap_chain_container
                 .swap_chain_loader
                 .queue_present(present_queue, &present_info)
         };
 
-        let _resize_happened =
-            self.handle_resize(ResizeDetectedLocation::InPresent, &present_result, window_size)?;
+        let _resize_happened = self.handle_resize(
+            ResizeDetectedLocation::InPresent,
+            &present_result,
+            window_size,
+        )?;
 
         self.sync_container.update_frame_counter();
 
         Ok(())
     }
 
+    /// Refreshes the uniform buffer with new data that we want to pass into shaders.
+    /// The purpose of uniform buffers is to contain data that shaders read. This may be things like transformation matrices needed for 3D rendering.
     fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
         let angle_rad = 0.0; //apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
                              // our models for some reason are rotated such that up is z instead of y
@@ -509,16 +554,30 @@ impl VulkanApp {
             &up_vector,
         );
 
-        let aspect_ratio = self.dependent_fields.swap_chain_container.swap_chain_extent.width as f32
-            / self.dependent_fields.swap_chain_container.swap_chain_extent.height as f32;
+        let aspect_ratio = self
+            .dependent_fields
+            .swap_chain_container
+            .swap_chain_extent
+            .width as f32
+            / self
+                .dependent_fields
+                .swap_chain_container
+                .swap_chain_extent
+                .height as f32;
 
         // applying some corrections here because this calculation is for opengl
         // and we have vulkan where in ndc coords the y axis points down
         // also it doesn't use reverse depth
         let mut proj = glm::perspective_fov_rh_zo(
             45.0 * std::f32::consts::PI / 180.0,
-            self.dependent_fields.swap_chain_container.swap_chain_extent.width as f32,
-            self.dependent_fields.swap_chain_container.swap_chain_extent.height as f32,
+            self.dependent_fields
+                .swap_chain_container
+                .swap_chain_extent
+                .width as f32,
+            self.dependent_fields
+                .swap_chain_container
+                .swap_chain_extent
+                .height as f32,
             0.1,
             10.0,
         );
@@ -584,6 +643,7 @@ impl VulkanApp {
         Ok(())
     }
 
+    /// Block until all operations on queues are done.
     pub fn wait_until_device_idle(&self) -> Result<()> {
         unsafe {
             self.logical_device.device_wait_idle()?;
@@ -591,7 +651,14 @@ impl VulkanApp {
         Ok(())
     }
 
-    fn create_instance(window_title: &str, engine_name: &str, entry: &ash::Entry, validation: &VulkanValidation) -> Result<ash::Instance> {
+    /// Create an Ash instance.
+    /// Ash is the vulkan rust library that provides the unsafe binding functions to call vulkan API from rust.
+    fn create_instance(
+        window_title: &str,
+        engine_name: &str,
+        entry: &ash::Entry,
+        validation: &VulkanValidation,
+    ) -> Result<ash::Instance> {
         if validation.check_validation_layer_support(entry)? == false {
             return Err(VulkanError::RequiredValidationLayersUnsupported);
         }
@@ -630,6 +697,7 @@ impl VulkanApp {
         Ok(instance)
     }
 
+    /// Cleanup all objects that depend on the swap chain
     unsafe fn cleanup_swap_chain(&mut self) {
         std::mem::take(&mut self.dependent_fields.color_resource).drop(&self.logical_device);
         std::mem::take(&mut self.dependent_fields.depth_resource).drop(&self.logical_device);
@@ -653,8 +721,10 @@ impl VulkanApp {
 
         self.logical_device
             .destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
-        self.logical_device
-            .destroy_pipeline_layout(self.dependent_fields.graphics_pipeline.pipeline_layout, None);
+        self.logical_device.destroy_pipeline_layout(
+            self.dependent_fields.graphics_pipeline.pipeline_layout,
+            None,
+        );
 
         self.logical_device
             .destroy_render_pass(self.dependent_fields.graphics_pipeline.render_pass, None);
@@ -662,7 +732,8 @@ impl VulkanApp {
         for &image_view in &self.dependent_fields.image_views_container.image_views {
             self.logical_device.destroy_image_view(image_view, None);
         }
-        self.dependent_fields.swap_chain_container
+        self.dependent_fields
+            .swap_chain_container
             .swap_chain_loader
             .destroy_swapchain(self.dependent_fields.swap_chain_container.swap_chain, None);
     }

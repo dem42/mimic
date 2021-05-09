@@ -1,5 +1,5 @@
 use crate::util::validation::VulkanValidation;
-use log::{info, trace, warn, error};
+use log::{error, info, trace, warn};
 
 use ash::vk;
 use std::ffi::CStr;
@@ -12,7 +12,7 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _p_user_data: *mut c_void,
-) -> vk::Bool32 {    
+) -> vk::Bool32 {
     let types = match message_type {
         vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "[General]",
         vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE => "[Performance]",
@@ -24,19 +24,19 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {
             trace!("[Verbose]{}{:?}", types, message);
-        },
+        }
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => {
             info!("[Info]{}{:?}", types, message);
-        },
+        }
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => {
             warn!("[Warning]{}{:?}", types, message);
-        },
+        }
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
             error!("[Error]{}{:?}", types, message);
-        },
+        }
         _ => {
             error!("[Unkown]{}{:?}", types, message);
-        },
+        }
     };
 
     vk::FALSE
