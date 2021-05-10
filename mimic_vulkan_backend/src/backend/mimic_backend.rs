@@ -50,6 +50,18 @@ fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFe
     physical_device_featrues.sampler_anisotropy == vk::TRUE
 }
 
+struct RenderCommandSwapChainFields {
+    descriptor_data: DescriptorData,
+    command_buffers: Vec<vk::CommandBuffer>,
+}
+
+struct RenderCommand {
+    vertex_buffer: VertexBuffer,
+    index_buffer: IndexBuffer,
+    texture_image: TextureImage,
+    dependent_fields: RenderCommandSwapChainFields,
+}
+
 /// This structure wraps all the objects that depend on the swap-chain in order to be able to recreate them when the swap-chain images change.
 /// Swap-chain is a series of framebuffers that can be drawn to and later presented to the graphics display.
 /// The purpose is to allow double buffering so that the framebuffer isn't being written to while it is presented.
@@ -74,6 +86,7 @@ pub struct VulkanApp {
     debug: VulkanDebug,
     surface_container: SurfaceContainer,
     physical_device: vk::PhysicalDevice,
+    physical_device_properties: vk::PhysicalDeviceProperties,
     logical_device: ash::Device,
     queue_indices: QueueFamilyIndices,
     queues: QueueMap,
@@ -219,6 +232,7 @@ impl VulkanApp {
             debug,
             surface_container,
             physical_device,
+            physical_device_properties,
             logical_device,
             queue_indices,
             queues,
@@ -236,6 +250,78 @@ impl VulkanApp {
         };
 
         result
+    }
+
+    pub fn create_render_command(
+        &mut self,
+        texture_file: &str,
+        model_file: &str,
+    ) -> Result<()> {
+
+        let texture_image = TextureImage::new(
+            texture_file,
+            &self.instance,
+            self.physical_device,
+            &self.logical_device,
+            self.command_pool,
+            &self.queues,
+            &self.physical_device_properties,
+        )?;
+
+        let model = Mesh::new(
+            model_file,
+            MeshLoadingFlags::INVERTED_UP,
+        )?;
+
+        let vertex_buffer = VertexBuffer::new(
+            &model.vertices,
+            &self.instance,
+            self.physical_device,
+            &self.logical_device,
+            self.command_pool,
+            &self.queues,
+        )?;
+
+        let index_buffer = IndexBuffer::new(
+            &model.indices,
+            &self.instance,
+            self.physical_device,
+            &self.logical_device,
+            self.command_pool,
+            &self.queues,
+        )?;
+
+        let descriptor_data = DescriptorData::new(
+            &self.logical_device,
+            &self.dependent_fields.swap_chain_container,
+            self.uniform_descriptors,
+            &self.dependent_fields.uniform_buffers,
+            &texture_image,
+        )?;
+
+        // command buffers are released when we destroy the pool
+        let command_buffers = command_buffers::create_command_buffers(
+            &self.logical_device,
+            &self.command_pool,
+            &self.dependent_fields.framebuffers,
+            &self.dependent_fields.graphics_pipeline,
+            &self.dependent_fields.swap_chain_container,
+            &vertex_buffer,
+            &index_buffer,
+            &descriptor_data,
+        )?;
+
+        let render_command = RenderCommand {
+            vertex_buffer,
+            index_buffer,
+            texture_image,
+            dependent_fields: RenderCommandSwapChainFields {
+                descriptor_data,
+                command_buffers,
+            }
+        };
+
+        Ok(())
     }
 
     /// Swapchain dependent fields are the ones that we need to recreate for example anytime that the window size changes
@@ -620,7 +706,7 @@ impl VulkanApp {
         proj.m22 *= -1.0;
 
         let ubos = [uniforms::buffers::UniformBufferObject {
-            foo: uniforms::buffers::Foo {
+            force_align_wrapper: uniforms::buffers::ForceAlignWrapper {
                 foo: glm::Vec2::new(0., 0.),
             },
             model,

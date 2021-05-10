@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "demo",
     "mimic",
     "rustyutil",
     "mimic_frontend",

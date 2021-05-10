@@ -7,7 +7,7 @@ use ash::vk;
 use std::convert::TryFrom;
 
 #[repr(C, align(16))]
-pub struct Foo {
+pub struct ForceAlignWrapper {
     pub foo: glm::Vec2,
 }
 
@@ -16,7 +16,7 @@ pub struct Foo {
 // but since vec2 is only 8 bytes our model mat is not properly aligned unless we force alignment
 #[repr(C, align(16))]
 pub struct UniformBufferObject {
-    pub foo: Foo,
+    pub force_align_wrapper: ForceAlignWrapper,
     pub model: glm::Mat4,
     pub view: glm::Mat4,
     pub proj: glm::Mat4,
