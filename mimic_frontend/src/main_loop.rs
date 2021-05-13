@@ -12,9 +12,11 @@ use winit::{
 pub struct MainLoop;
 
 impl MainLoop {
+    const ENGINE_NAME: &'static str = "Vulkan Engine";
+
     /// Initialize a window with the given `window_tile` and the provided `window_width` and `window_height`. 
     /// The provided `event_loop` is used to detect and react to window events.
-    pub fn init_window(
+    fn init_window(
         window_title: &str,
         window_width: u32,
         window_height: u32,
@@ -29,11 +31,20 @@ impl MainLoop {
 
     /// Run the provided `vulkan_app` inside of the window.
     pub fn run(
-        mut vulkan_app: VulkanApp,
-        event_loop: EventLoop<()>,
-        window: winit::window::Window,
-        mut apptime: AppTime,
+        window_title: &str,
+        window_width: u32,
+        window_height: u32,
     ) {
+        let event_loop = EventLoop::new();
+        let winit_window = Self::init_window(window_title, window_width, window_height, &event_loop);
+
+        let window_surface = winit_window::get_window_surface_from_winit(&winit_window)
+            .expect("Failed to get window surface");
+        let window_size =
+            winit_window::get_window_size_from_winit(&winit_window).expect("Failed to get window size");
+
+        let mut vulkan_app = VulkanApp::new(window_title, Self::ENGINE_NAME, &window_surface, &window_size);
+        let mut apptime = AppTime::new();
         event_loop.run(move |event, _, control_flow| match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
@@ -64,7 +75,7 @@ impl MainLoop {
                 _ => {}
             },
             Event::MainEventsCleared => {
-                window.request_redraw();
+                winit_window.request_redraw();
             }
             Event::RedrawRequested(_window_id) => {
                 let time_update_result = apptime.update();
@@ -72,7 +83,7 @@ impl MainLoop {
                     error!("Failed to update app time: {}", error);
                 }
 
-                if let Ok(window_size) = winit_window::get_window_size_from_winit(&window) {
+                if let Ok(window_size) = winit_window::get_window_size_from_winit(&winit_window) {
                     let frame_result = vulkan_app.draw_frame(&window_size, &apptime);
                     if let Err(error) = frame_result {
                         error!("Failed to draw frame: {}", error);
