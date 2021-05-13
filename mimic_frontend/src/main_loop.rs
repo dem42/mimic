@@ -1,12 +1,11 @@
-use crate::{
-    render_commands::RenderCommands,
-    result::Result,
-    winit_window,
-};
+use crate::{render_commands::RenderCommands, result::Result, winit_window};
 use log::{error, info};
 use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
 use rustyutil::apptime::AppTime;
-use winit::{event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window};
+use winit::{
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+};
 
 pub trait Application {
     fn update(&mut self, render_commands: &mut RenderCommands, apptime: &AppTime);
@@ -38,20 +37,28 @@ impl MainLoopBuilder {
         window_height: u32,
     ) -> Result<&mut Self> {
         self.event_loop = Some(EventLoop::new());
-        self.window = Some(
-            Self::init_window(window_title, window_width, window_height, self.event_loop.as_ref().unwrap())?
-        );
+        self.window = Some(Self::init_window(
+            window_title,
+            window_width,
+            window_height,
+            self.event_loop.as_ref().unwrap(),
+        )?);
 
-        let window_surface = winit_window::get_window_surface_from_winit(self.window.as_ref().unwrap())?;
-        let window_size =
-            winit_window::get_window_size_from_winit(self.window.as_ref().unwrap())?;
+        let window_surface =
+            winit_window::get_window_surface_from_winit(self.window.as_ref().unwrap())?;
+        let window_size = winit_window::get_window_size_from_winit(self.window.as_ref().unwrap())?;
 
-        self.vulkan_app = Some(VulkanApp::new(window_title, Self::ENGINE_NAME, &window_surface, &window_size));
+        self.vulkan_app = Some(VulkanApp::new(
+            window_title,
+            Self::ENGINE_NAME,
+            &window_surface,
+            &window_size,
+        )?);
 
         Ok(self)
     }
 
-    /// Initialize a window with the given `window_tile` and the provided `window_width` and `window_height`. 
+    /// Initialize a window with the given `window_tile` and the provided `window_width` and `window_height`.
     /// The provided `event_loop` is used to detect and react to window events.
     fn init_window(
         window_title: &str,
@@ -69,22 +76,19 @@ impl MainLoopBuilder {
     /// Run the provided `vulkan_app` inside of the window.
     /// By restricting the generic type A to be 'static we prevent A to be a reference unless
     /// it is a reference with a 'static lifetime. This means application is moved into run and later moved into the event loop.
-    pub fn run<A: Application + 'static>(
-        &mut self,
-        mut application: A,
-    ) -> ! {
+    pub fn run<A: Application + 'static>(&mut self, mut application: A) -> ! {
         let event_loop = self.event_loop.take().unwrap();
         let winit_window = self.window.take().unwrap();
         let mut vulkan_app = self.vulkan_app.take().unwrap();
-        
+
         let mut apptime = AppTime::new();
         let mut render_commands = RenderCommands::default();
-        event_loop.run(move |event, _, control_flow| { 
+        event_loop.run(move |event, _, control_flow| {
             // we set the control flow to poll on every invocation of the event_loop callback
             // this makes it so that after this event_loop iteration finishes another one begins immediately
             // thus there won't be any waiting and we get a call to application.update()
             *control_flow = ControlFlow::Poll;
-            match event {            
+            match event {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => {
                         Self::exit(control_flow);
@@ -118,7 +122,7 @@ impl MainLoopBuilder {
                     if let Err(error) = time_update_result {
                         error!("Failed to update app time: {}", error);
                         Self::exit(control_flow);
-                    } else {                        
+                    } else {
                         application.update(&mut render_commands, &apptime);
 
                         if render_commands.request_redraw {
@@ -127,7 +131,8 @@ impl MainLoopBuilder {
                     }
                 }
                 Event::RedrawRequested(_window_id) => {
-                    if let Ok(window_size) = winit_window::get_window_size_from_winit(&winit_window) {
+                    if let Ok(window_size) = winit_window::get_window_size_from_winit(&winit_window)
+                    {
                         let frame_result = vulkan_app.draw_frame(&window_size, &apptime);
                         if let Err(error) = frame_result {
                             error!("Failed to draw frame: {}", error);

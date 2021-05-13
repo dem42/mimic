@@ -121,16 +121,14 @@ impl VulkanApp {
         engine_name: &str,
         window_surface: &WindowSurface,
         window_size: &WindowSize,
-    ) -> Self {
+    ) -> Result<Self> {
         let entry = ash::Entry::new().unwrap();
         let validation = VulkanValidation::enabled(util::validation::ValidationOptions::Verbose);
         // creating the instance is equivalent to initializing the vulkan library
-        let instance = Self::create_instance(window_title, engine_name, &entry, &validation)
-            .expect("Failed to create instance");
+        let instance = Self::create_instance(window_title, engine_name, &entry, &validation)?;
         let debug = VulkanDebug::new(&entry, &instance, &validation);
         // creating a surface to present images to
-        let surface_container = util::platform::create_surface(&entry, &instance, window_surface)
-            .expect("Failed to create surface");
+        let surface_container = util::platform::create_surface(&entry, &instance, window_surface)?;
         // pick the first graphics card that supports all the features we specified in instance
         let requirements = DeviceRequirements::new(
             &REQUIRED_QUEUES,
@@ -138,10 +136,9 @@ impl VulkanApp {
             is_swap_chain_adequate,
             is_device_supporting_features,
         );
-        let physical_device = pick_physical_device(&instance, &surface_container, &requirements)
-            .expect("Failed to create physical device");
-        let physical_device_properties = get_physical_device_properties(&instance, physical_device)
-            .expect("Failed to get physical device properties");
+        let physical_device = pick_physical_device(&instance, &surface_container, &requirements)?;
+        let physical_device_properties =
+            get_physical_device_properties(&instance, physical_device)?;
         let msaa_samples = get_max_sample_count(physical_device_properties);
         // create logical device and queues
         let queue_indices = QueueFamilyIndices::find(
@@ -149,24 +146,20 @@ impl VulkanApp {
             physical_device,
             &surface_container,
             &requirements,
-        )
-        .expect("Failed to create queue indices");
+        )?;
         let logical_device = create_logical_device(
             &instance,
             physical_device,
             &queue_indices,
             &requirements,
             &validation,
-        )
-        .expect("Failed to create logical device");
+        )?;
 
-        let sync_container =
-            SynchronizationContainer::create(&logical_device).expect("Failed to create semaphores");
+        let sync_container = SynchronizationContainer::create(&logical_device)?;
 
-        let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)
-            .expect("Failed to create command pool");
+        let command_pool = command_buffers::create_command_pool(&logical_device, &queue_indices)?;
 
-        let queues = QueueMap::new(&queue_indices, &logical_device).expect("Failed to get queues");
+        let queues = QueueMap::new(&queue_indices, &logical_device)?;
 
         let texture_image = TextureImage::new(
             "mimic_vulkan_backend/textures/viking_room.png",
@@ -176,14 +169,12 @@ impl VulkanApp {
             command_pool,
             &queues,
             &physical_device_properties,
-        )
-        .expect("Failed to create texture image");
+        )?;
 
         let model = Mesh::new(
             "mimic_vulkan_backend/models/viking_room.obj",
             MeshLoadingFlags::INVERTED_UP,
-        )
-        .expect("Failed to load model");
+        )?;
 
         let vertex_buffer = VertexBuffer::new(
             &model.vertices,
@@ -192,8 +183,7 @@ impl VulkanApp {
             &logical_device,
             command_pool,
             &queues,
-        )
-        .expect("Failed to create vertex buffer");
+        )?;
 
         let index_buffer = IndexBuffer::new(
             &model.indices,
@@ -202,12 +192,10 @@ impl VulkanApp {
             &logical_device,
             command_pool,
             &queues,
-        )
-        .expect("Failed to create index buffer");
+        )?;
 
         let uniform_descriptors =
-            uniforms::descriptors::create_descriptor_set_layout(&logical_device)
-                .expect("Failed to create uniform descriptor set layout");
+            uniforms::descriptors::create_descriptor_set_layout(&logical_device)?;
 
         let dependent_fields = Self::create_swapchain_dependent_fields(
             &instance,
@@ -223,7 +211,7 @@ impl VulkanApp {
             &texture_image,
             window_size,
             msaa_samples,
-        );
+        )?;
 
         let result = Self {
             _entry: entry,
@@ -249,15 +237,10 @@ impl VulkanApp {
             window_minimized: false,
         };
 
-        result
+        Ok(result)
     }
 
-    pub fn create_render_command(
-        &mut self,
-        texture_file: &str,
-        model_file: &str,
-    ) -> Result<()> {
-
+    pub fn create_render_command(&mut self, texture_file: &str, model_file: &str) -> Result<()> {
         let texture_image = TextureImage::new(
             texture_file,
             &self.instance,
@@ -268,10 +251,7 @@ impl VulkanApp {
             &self.physical_device_properties,
         )?;
 
-        let model = Mesh::new(
-            model_file,
-            MeshLoadingFlags::INVERTED_UP,
-        )?;
+        let model = Mesh::new(model_file, MeshLoadingFlags::INVERTED_UP)?;
 
         let vertex_buffer = VertexBuffer::new(
             &model.vertices,
@@ -318,7 +298,7 @@ impl VulkanApp {
             dependent_fields: RenderCommandSwapChainFields {
                 descriptor_data,
                 command_buffers,
-            }
+            },
         };
 
         Ok(())
@@ -339,7 +319,7 @@ impl VulkanApp {
         texture_image: &TextureImage,
         window_size: &WindowSize,
         msaa_samples: vk::SampleCountFlags,
-    ) -> SwapChainDependentFields {
+    ) -> Result<SwapChainDependentFields> {
         let swap_chain_container = SwapChainContainer::new(
             instance,
             physical_device,
@@ -347,11 +327,9 @@ impl VulkanApp {
             surface_container,
             window_size,
             queue_indices,
-        )
-        .expect("Failed to create swap chain");
+        )?;
 
-        let image_views_container = ImageViews::new(logical_device, &swap_chain_container)
-            .expect("Failed to create image views");
+        let image_views_container = ImageViews::new(logical_device, &swap_chain_container)?;
 
         let graphics_pipeline = GraphicsPipeline::new(
             instance,
@@ -360,8 +338,7 @@ impl VulkanApp {
             &swap_chain_container,
             uniform_descriptors,
             msaa_samples,
-        )
-        .expect("Failed to create graphics pipeline");
+        )?;
 
         let color_resource = ColorResource::new(
             msaa_samples,
@@ -369,8 +346,7 @@ impl VulkanApp {
             logical_device,
             physical_device,
             &swap_chain_container,
-        )
-        .expect("Failed to create a color resource that is to be used for MSAA");
+        )?;
 
         let depth_resource = DepthResource::new(
             msaa_samples,
@@ -380,8 +356,7 @@ impl VulkanApp {
             &swap_chain_container,
             *command_pool,
             queues,
-        )
-        .expect("Failed to create depth resoruce");
+        )?;
 
         let framebuffers = framebuffers::create_framebuffers(
             logical_device,
@@ -390,16 +365,14 @@ impl VulkanApp {
             depth_resource.depth_image_view,
             &color_resource,
             &swap_chain_container,
-        )
-        .expect("Failed to create framebuffers");
+        )?;
 
         let uniform_buffers = uniforms::buffers::create_uniform_buffers(
             instance,
             physical_device,
             logical_device,
             &swap_chain_container,
-        )
-        .expect("Failed to create uniform buffers");
+        )?;
 
         let descriptor_data = DescriptorData::new(
             logical_device,
@@ -407,8 +380,7 @@ impl VulkanApp {
             *uniform_descriptors,
             &uniform_buffers,
             texture_image,
-        )
-        .expect("Failed to create descriptor data");
+        )?;
 
         // command buffers are released when we destroy the pool
         let command_buffers = command_buffers::create_command_buffers(
@@ -420,10 +392,9 @@ impl VulkanApp {
             vertex_buffer,
             index_buffer,
             &descriptor_data,
-        )
-        .expect("Failed to create command buffers");
+        )?;
 
-        SwapChainDependentFields {
+        Ok(SwapChainDependentFields {
             swap_chain_container,
             image_views_container,
             graphics_pipeline,
@@ -433,7 +404,7 @@ impl VulkanApp {
             uniform_buffers,
             descriptor_data,
             command_buffers,
-        }
+        })
     }
 
     /// The swap-chain is a series of framebuffers that are to be presented to the graphics display.
@@ -458,7 +429,7 @@ impl VulkanApp {
             &self.texture_image,
             window_size,
             self.msaa_samples,
-        );
+        )?;
 
         Ok(())
     }
@@ -774,11 +745,7 @@ impl VulkanApp {
             enabled_extension_count: extension_names.len() as u32,
         };
 
-        let instance: ash::Instance = unsafe {
-            entry
-                .create_instance(&create_info, None)
-                .expect("Failed to create instance!")
-        };
+        let instance: ash::Instance = unsafe { entry.create_instance(&create_info, None)? };
 
         Ok(instance)
     }

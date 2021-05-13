@@ -21,6 +21,7 @@ pub fn main() {
     env_logger::init();
     info!("Hello demo");
     MainLoopBuilder::new()
-        .with_window(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT).expect("Failed to create window")
-        .run(Test{});
+        .with_window(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT)
+        .expect("Failed to create window")
+        .run(Test {});
 }

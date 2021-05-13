@@ -1,8 +1,8 @@
-use ash::vk;
+use ash::{vk, InstanceError};
 use image::ImageError;
 use std::{num::TryFromIntError, str::Utf8Error};
-use tobj::LoadError;
 use thiserror::Error;
+use tobj::LoadError;
 
 pub type Result<T> = std::result::Result<T, VulkanError>;
 
@@ -55,6 +55,8 @@ pub enum VulkanError {
     #[error("No uniform buffer for swap chain image with index {0}")]
     UniformBufferNotAvailable(usize),
     // fallback errors
+    #[error(transparent)]
+    AshInstanceError(#[from] InstanceError),
     #[error(transparent)]
     ImageError(#[from] ImageError),
     #[error(transparent)]
