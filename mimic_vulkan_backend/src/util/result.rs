@@ -2,7 +2,6 @@ use ash::vk;
 use image::ImageError;
 use std::{num::TryFromIntError, str::Utf8Error};
 use tobj::LoadError;
-
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, VulkanError>;
