@@ -56,6 +56,7 @@ struct RenderCommandSwapChainFields {
 }
 
 struct RenderCommand {
+    _model: Mesh,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     texture_image: TextureImage,
@@ -72,9 +73,7 @@ struct SwapChainDependentFields {
     color_resource: ColorResource,
     depth_resource: DepthResource,
     framebuffers: Vec<vk::Framebuffer>,
-    descriptor_data: DescriptorData,
     uniform_buffers: Vec<Buffer>,
-    command_buffers: Vec<vk::CommandBuffer>,
 }
 
 /// A structure that represents a vulkan application.
@@ -92,12 +91,9 @@ pub struct VulkanApp {
     queues: QueueMap,
     dependent_fields: SwapChainDependentFields,
     uniform_descriptors: vk::DescriptorSetLayout,
-    command_pool: vk::CommandPool,
-    _model: Mesh,
-    vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,
+    command_pool: vk::CommandPool,    
+    current_render_command: Option<RenderCommand>,    
     sync_container: SynchronizationContainer,
-    texture_image: TextureImage,
     msaa_samples: vk::SampleCountFlags,
     /// This field is used to determine whether the window was resized.
     /// This is for example the case when the graphics display window was resized.
@@ -161,41 +157,10 @@ impl VulkanApp {
 
         let queues = QueueMap::new(&queue_indices, &logical_device)?;
 
-        let texture_image = TextureImage::new(
-            "mimic_vulkan_backend/textures/viking_room.png",
-            &instance,
-            physical_device,
-            &logical_device,
-            command_pool,
-            &queues,
-            &physical_device_properties,
-        )?;
-
-        let model = Mesh::new(
-            "mimic_vulkan_backend/models/viking_room.obj",
-            MeshLoadingFlags::INVERTED_UP,
-        )?;
-
-        let vertex_buffer = VertexBuffer::new(
-            &model.vertices,
-            &instance,
-            physical_device,
-            &logical_device,
-            command_pool,
-            &queues,
-        )?;
-
-        let index_buffer = IndexBuffer::new(
-            &model.indices,
-            &instance,
-            physical_device,
-            &logical_device,
-            command_pool,
-            &queues,
-        )?;
-
         let uniform_descriptors =
             uniforms::descriptors::create_descriptor_set_layout(&logical_device)?;
+
+        let current_render_command: Option<RenderCommand> = None;
 
         let dependent_fields = Self::create_swapchain_dependent_fields(
             &instance,
@@ -205,10 +170,7 @@ impl VulkanApp {
             &surface_container,
             &command_pool,
             &queues,
-            &vertex_buffer,
-            &index_buffer,
-            &uniform_descriptors,
-            &texture_image,
+            &uniform_descriptors,            
             window_size,
             msaa_samples,
         )?;
@@ -227,17 +189,60 @@ impl VulkanApp {
             dependent_fields,
             uniform_descriptors,
             command_pool,
-            _model: model,
-            vertex_buffer,
-            index_buffer,
             sync_container,
-            texture_image,
             msaa_samples,
+            current_render_command,
             window_resized: false,
             window_minimized: false,
         };
 
         Ok(result)
+    }
+
+    fn create_render_command_swap_chain_fields(
+        logical_device: &ash::Device,
+        texture_image: &TextureImage,
+        vertex_buffer: &VertexBuffer,
+        index_buffer: &IndexBuffer,
+        command_pool: &vk::CommandPool,
+        swap_chain_container: &SwapChainContainer,
+        uniform_buffers: &Vec<Buffer>,
+        uniform_descriptors: vk::DescriptorSetLayout,
+        framebuffers: &Vec<vk::Framebuffer>,
+        graphics_pipeline: &GraphicsPipeline,
+    ) -> Result<RenderCommandSwapChainFields> {
+
+        let descriptor_data = DescriptorData::new(
+            logical_device,
+            swap_chain_container,
+            uniform_descriptors,
+            uniform_buffers,
+            texture_image,
+        )?;
+
+        // command buffers are released when we destroy the pool
+        let command_buffers = command_buffers::create_command_buffers(
+            logical_device,
+            command_pool,
+            framebuffers,
+            graphics_pipeline,
+            swap_chain_container,
+            vertex_buffer,
+            index_buffer,
+            &descriptor_data,
+        )?;
+
+        Ok(RenderCommandSwapChainFields{
+            descriptor_data,
+            command_buffers,
+        })
+    }
+
+    pub fn create_default_render_command(&mut self) -> Result<()> {
+        self.create_render_command(
+            "mimic_vulkan_backend/textures/viking_room.png", 
+            "mimic_vulkan_backend/models/viking_room.obj",
+        )
     }
 
     pub fn create_render_command(&mut self, texture_file: &str, model_file: &str) -> Result<()> {
@@ -271,35 +276,26 @@ impl VulkanApp {
             &self.queues,
         )?;
 
-        let descriptor_data = DescriptorData::new(
-            &self.logical_device,
-            &self.dependent_fields.swap_chain_container,
-            self.uniform_descriptors,
-            &self.dependent_fields.uniform_buffers,
-            &texture_image,
-        )?;
-
-        // command buffers are released when we destroy the pool
-        let command_buffers = command_buffers::create_command_buffers(
-            &self.logical_device,
-            &self.command_pool,
-            &self.dependent_fields.framebuffers,
+        let dependent_fields = Self::create_render_command_swap_chain_fields(
+            &self.logical_device, 
+            &texture_image, 
+            &vertex_buffer, 
+            &index_buffer, 
+            &self.command_pool, 
+            &self.dependent_fields.swap_chain_container, 
+            &self.dependent_fields.uniform_buffers, 
+            self.uniform_descriptors, 
+            &self.dependent_fields.framebuffers, 
             &self.dependent_fields.graphics_pipeline,
-            &self.dependent_fields.swap_chain_container,
-            &vertex_buffer,
-            &index_buffer,
-            &descriptor_data,
         )?;
 
-        let render_command = RenderCommand {
+        self.current_render_command = Some(RenderCommand {
+            _model: model,
             vertex_buffer,
             index_buffer,
             texture_image,
-            dependent_fields: RenderCommandSwapChainFields {
-                descriptor_data,
-                command_buffers,
-            },
-        };
+            dependent_fields,
+        });
 
         Ok(())
     }
@@ -313,10 +309,7 @@ impl VulkanApp {
         surface_container: &SurfaceContainer,
         command_pool: &vk::CommandPool,
         queues: &QueueMap,
-        vertex_buffer: &VertexBuffer,
-        index_buffer: &IndexBuffer,
         uniform_descriptors: &vk::DescriptorSetLayout,
-        texture_image: &TextureImage,
         window_size: &WindowSize,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<SwapChainDependentFields> {
@@ -374,26 +367,6 @@ impl VulkanApp {
             &swap_chain_container,
         )?;
 
-        let descriptor_data = DescriptorData::new(
-            logical_device,
-            &swap_chain_container,
-            *uniform_descriptors,
-            &uniform_buffers,
-            texture_image,
-        )?;
-
-        // command buffers are released when we destroy the pool
-        let command_buffers = command_buffers::create_command_buffers(
-            logical_device,
-            command_pool,
-            &framebuffers,
-            &graphics_pipeline,
-            &swap_chain_container,
-            vertex_buffer,
-            index_buffer,
-            &descriptor_data,
-        )?;
-
         Ok(SwapChainDependentFields {
             swap_chain_container,
             image_views_container,
@@ -402,8 +375,6 @@ impl VulkanApp {
             depth_resource,
             framebuffers,
             uniform_buffers,
-            descriptor_data,
-            command_buffers,
         })
     }
 
@@ -412,6 +383,9 @@ impl VulkanApp {
     pub fn recreate_swap_chain(&mut self, window_size: &WindowSize) -> Result<()> {
         unsafe {
             self.logical_device.device_wait_idle()?;
+            if let Some(render_command) = &mut self.current_render_command {
+                render_command.cleanup_swap_chain(&self.logical_device, self.command_pool);
+            }
             self.cleanup_swap_chain();
         }
 
@@ -423,13 +397,25 @@ impl VulkanApp {
             &self.surface_container,
             &self.command_pool,
             &self.queues,
-            &self.vertex_buffer,
-            &self.index_buffer,
             &self.uniform_descriptors,
-            &self.texture_image,
             window_size,
             self.msaa_samples,
         )?;
+
+        if let Some(render_command) = &mut self.current_render_command {
+            render_command.dependent_fields = Self::create_render_command_swap_chain_fields(
+                &self.logical_device, 
+                &render_command.texture_image, 
+                &render_command.vertex_buffer, 
+                &render_command.index_buffer, 
+                &self.command_pool, 
+                &self.dependent_fields.swap_chain_container, 
+                &self.dependent_fields.uniform_buffers, 
+                self.uniform_descriptors, 
+                &self.dependent_fields.framebuffers, 
+                &self.dependent_fields.graphics_pipeline,
+            )?;
+        }
 
         Ok(())
     }
@@ -471,6 +457,11 @@ impl VulkanApp {
         if self.window_minimized {
             return Ok(());
         }
+
+        if self.current_render_command.is_none() {
+            info!("No render command was submitted");
+            return Ok(());
+        };
 
         let cpu_gpu_to_wait_for = [self.sync_container.get_in_flight_fence()];
         unsafe {
@@ -533,13 +524,7 @@ impl VulkanApp {
             .map(|_x| vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .collect();
 
-        let command_buffer_ptr = if !self.dependent_fields.command_buffers.is_empty() {
-            &self.dependent_fields.command_buffers[available_image_index]
-        } else {
-            return Err(VulkanError::CommandBufferNotAvailable(
-                available_image_index,
-            ));
-        };
+        let command_buffer_ptr = RenderCommand::get_command_buffer_at(&self.current_render_command, available_image_index)?;
 
         let signal_semaphores = [self.sync_container.get_render_finished_semaphore()];
         let signal_semaphores_count = u32::try_from(signal_semaphores.len())?;
@@ -759,18 +744,11 @@ impl VulkanApp {
             self.logical_device.destroy_framebuffer(*framebuffer, None);
         }
 
-        // the descriptor sets are cleared automatically when the pool is cleared
-        self.logical_device
-            .destroy_descriptor_pool(self.dependent_fields.descriptor_data.descriptor_pool, None);
-
         for uniform_buffer in self.dependent_fields.uniform_buffers.iter() {
             self.logical_device
                 .destroy_buffer(uniform_buffer.buffer, None);
             self.logical_device.free_memory(uniform_buffer.memory, None);
         }
-
-        self.logical_device
-            .free_command_buffers(self.command_pool, &self.dependent_fields.command_buffers);
 
         self.logical_device
             .destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
@@ -792,19 +770,48 @@ impl VulkanApp {
     }
 }
 
+impl RenderCommand {
+
+    fn get_command_buffer_at(optional_self: &Option<Self>, available_image_index: usize) -> Result<&vk::CommandBuffer> {
+        if let Some(render_command) = optional_self {
+            if !render_command.dependent_fields.command_buffers.is_empty() {
+                Ok(&render_command.dependent_fields.command_buffers[available_image_index])
+            } else {
+                Err(VulkanError::CommandBufferNotAvailable(
+                    available_image_index,
+                ))
+            }
+        } else {
+            Err(VulkanError::RenderCommandNotAvailable)
+        }
+    }
+
+    unsafe fn cleanup_swap_chain(&mut self, logical_device: &ash::Device, command_pool: vk::CommandPool) {
+        // the descriptor sets are cleared automatically when the pool is cleared
+        logical_device.destroy_descriptor_pool(self.dependent_fields.descriptor_data.descriptor_pool, None);
+            
+        logical_device.free_command_buffers(command_pool, &self.dependent_fields.command_buffers);
+    }
+
+    unsafe fn cleanup(&mut self, logical_device: &ash::Device, command_pool: vk::CommandPool) {       
+        self.cleanup_swap_chain(logical_device, command_pool);
+        std::mem::take(&mut self.texture_image).cleanup(logical_device);
+        std::mem::take(&mut self.index_buffer).cleanup(logical_device);
+        std::mem::take(&mut self.vertex_buffer).cleanup(logical_device);
+    }
+}
+
 impl Drop for VulkanApp {
     fn drop(&mut self) {
         info!("VulkanApp exiting");
         unsafe {
+            if let Some(mut render_command) = std::mem::take(&mut self.current_render_command) {
+                render_command.cleanup(&self.logical_device, self.command_pool);
+            }            
             self.cleanup_swap_chain();
-
-            std::mem::take(&mut self.texture_image).drop(&self.logical_device);
 
             self.logical_device
                 .destroy_descriptor_set_layout(self.uniform_descriptors, None);
-
-            std::mem::take(&mut self.index_buffer).drop(&self.logical_device);
-            std::mem::take(&mut self.vertex_buffer).drop(&self.logical_device);
 
             self.sync_container.destroy(&self.logical_device);
             self.logical_device

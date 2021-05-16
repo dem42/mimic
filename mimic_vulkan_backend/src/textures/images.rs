@@ -392,7 +392,7 @@ impl TextureImage {
         })
     }
 
-    pub unsafe fn drop(self, logical_device: &ash::Device) {
+    pub unsafe fn cleanup(self, logical_device: &ash::Device) {
         logical_device.destroy_sampler(self.sampler, None);
         logical_device.destroy_image_view(self.view, None);
 

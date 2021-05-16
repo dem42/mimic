@@ -48,12 +48,14 @@ impl MainLoopBuilder {
             winit_window::get_window_surface_from_winit(self.window.as_ref().unwrap())?;
         let window_size = winit_window::get_window_size_from_winit(self.window.as_ref().unwrap())?;
 
-        self.vulkan_app = Some(VulkanApp::new(
+        let mut vulkan_app = VulkanApp::new(
             window_title,
             Self::ENGINE_NAME,
             &window_surface,
             &window_size,
-        )?);
+        )?;
+        vulkan_app.create_default_render_command()?;
+        self.vulkan_app = Some(vulkan_app);
 
         Ok(self)
     }
@@ -79,7 +81,7 @@ impl MainLoopBuilder {
     pub fn run<A: Application + 'static>(&mut self, mut application: A) -> ! {
         let event_loop = self.event_loop.take().unwrap();
         let winit_window = self.window.take().unwrap();
-        let mut vulkan_app = self.vulkan_app.take().unwrap();
+        let mut vulkan_app = self.vulkan_app.take().unwrap();        
 
         let mut apptime = AppTime::new();
         let mut render_commands = RenderCommands::default();

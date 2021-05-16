@@ -43,6 +43,9 @@ pub enum VulkanError {
     // validation
     #[error("Not all required validation layers are supported")]
     RequiredValidationLayersUnsupported,
+    // render commands
+    #[error("No render command was available")]
+    RenderCommandNotAvailable,
     // shaders
     #[error("Failed to read shader: {0}")]
     ShaderFileReadFailure(String),

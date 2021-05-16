@@ -39,7 +39,7 @@ impl IndexBuffer {
         })
     }
 
-    pub unsafe fn drop(self, logical_device: &ash::Device) {
+    pub unsafe fn cleanup(self, logical_device: &ash::Device) {
         logical_device.destroy_buffer(self.data.buffer, None);
         logical_device.free_memory(self.data.memory, None);
     }
