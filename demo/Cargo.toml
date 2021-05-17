@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 mimic_frontend = { path = "../mimic_frontend" }
 mimic_vulkan_backend = { path = "../mimic_vulkan_backend" }
-rustyutil = { path = "../rustyutil" }
+mimic_common = { path = "../mimic_common" }
 log = "0.4"
 env_logger = "0.8.3"
 

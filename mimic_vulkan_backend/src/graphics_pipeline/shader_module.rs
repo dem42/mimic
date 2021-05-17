@@ -29,7 +29,12 @@ fn read_shader_file(file_name: &Path) -> Result<Vec<u8>> {
 
     let file_result = File::open(file_name);
     let file = match file_result {
-        Err(error) => return Err(VulkanError::ShaderFileReadFailure(format!("{}", error))),
+        Err(error) => {
+            return Err(VulkanError::ShaderFileReadFailure {
+                source: error,
+                shader_file: file_name.as_os_str().to_owned(),
+            })
+        }
         Ok(file) => file,
     };
 

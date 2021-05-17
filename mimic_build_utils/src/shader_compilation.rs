@@ -1,3 +1,4 @@
+use crate::resource_bundle::ResourceBundle;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
@@ -16,6 +17,9 @@ impl ShaderSource {
     }
 
     /// Compile the GLSL shader script into a SPIR-V representation.
+    /// Additionally, this emits a cargo:rerun-if-changed for the shader path
+    /// so that if there are any changes to the files under this folder, then the build.rs script
+    /// will execute again
     pub fn compile(&self, params: &ShaderCompileParams) -> Result<(), String> {
         println!(
             "cargo:rerun-if-changed={}",
@@ -82,20 +86,33 @@ impl ShaderCompileParams {
     const SHADERS_SPV: &'static str = "./shaders/spv";
 
     /// Creates an instance of shader compile parameters using the default `./shaders/` folder in the crate folder hierarchy.
-    pub fn new() -> Self {
+    pub fn new(resource_bundle: &ResourceBundle) -> io::Result<Self> {
+        let resource_dir = resource_bundle.resource_dir_path.as_path();
+        let output_dir = resource_dir
+            .join(Self::SHADERS_SPV)
+            .to_owned()
+            .canonicalize()?;
+        let input_dir = resource_dir
+            .join(Self::SHADERS_PATH)
+            .to_owned()
+            .canonicalize()?;
+
         // shaders path is where common shaders are stored
         // these should get compiled by this build script
         // and if any new files are added then the build script should rerun
-        println!("cargo:rerun-if-changed={}", Self::SHADERS_PATH);
+        println!("cargo:rerun-if-changed={}", input_dir.display());
 
         let out_arg_flag = OsStr::new("-o").to_owned();
-        let output_dir = Path::new(Self::SHADERS_SPV).to_owned();
-        let input_dir = Path::new(Self::SHADERS_PATH).to_owned();
-        Self {
+        println!(
+            "Compiling shader sources from {} to {}",
+            input_dir.display(),
+            output_dir.display(),
+        );
+        Ok(Self {
             input_dir,
             output_dir,
             out_arg_flag,
-        }
+        })
     }
 
     /// Locate all vertex and fragment GLSL shaders.

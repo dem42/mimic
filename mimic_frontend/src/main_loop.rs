@@ -1,7 +1,7 @@
 use crate::{render_commands::RenderCommands, result::Result, winit_window};
 use log::{error, info};
+use mimic_common::apptime::AppTime;
 use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
-use rustyutil::apptime::AppTime;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -81,7 +81,7 @@ impl MainLoopBuilder {
     pub fn run<A: Application + 'static>(&mut self, mut application: A) -> ! {
         let event_loop = self.event_loop.take().unwrap();
         let winit_window = self.window.take().unwrap();
-        let mut vulkan_app = self.vulkan_app.take().unwrap();        
+        let mut vulkan_app = self.vulkan_app.take().unwrap();
 
         let mut apptime = AppTime::new();
         let mut render_commands = RenderCommands::default();

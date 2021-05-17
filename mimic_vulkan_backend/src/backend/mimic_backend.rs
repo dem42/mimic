@@ -32,8 +32,8 @@ use ash::{
     vk,
 };
 use log::info;
+use mimic_common::apptime::AppTime;
 use nalgebra_glm as glm;
-use rustyutil::apptime::AppTime;
 use std::{convert::TryFrom, ffi::CString, ptr};
 
 const REQUIRED_QUEUES: [QueueType; 2] = [
@@ -91,8 +91,8 @@ pub struct VulkanApp {
     queues: QueueMap,
     dependent_fields: SwapChainDependentFields,
     uniform_descriptors: vk::DescriptorSetLayout,
-    command_pool: vk::CommandPool,    
-    current_render_command: Option<RenderCommand>,    
+    command_pool: vk::CommandPool,
+    current_render_command: Option<RenderCommand>,
     sync_container: SynchronizationContainer,
     msaa_samples: vk::SampleCountFlags,
     /// This field is used to determine whether the window was resized.
@@ -170,7 +170,7 @@ impl VulkanApp {
             &surface_container,
             &command_pool,
             &queues,
-            &uniform_descriptors,            
+            &uniform_descriptors,
             window_size,
             msaa_samples,
         )?;
@@ -211,7 +211,6 @@ impl VulkanApp {
         framebuffers: &Vec<vk::Framebuffer>,
         graphics_pipeline: &GraphicsPipeline,
     ) -> Result<RenderCommandSwapChainFields> {
-
         let descriptor_data = DescriptorData::new(
             logical_device,
             swap_chain_container,
@@ -232,7 +231,7 @@ impl VulkanApp {
             &descriptor_data,
         )?;
 
-        Ok(RenderCommandSwapChainFields{
+        Ok(RenderCommandSwapChainFields {
             descriptor_data,
             command_buffers,
         })
@@ -240,7 +239,7 @@ impl VulkanApp {
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
         self.create_render_command(
-            "mimic_vulkan_backend/textures/viking_room.png", 
+            "mimic_vulkan_backend/textures/viking_room.png",
             "mimic_vulkan_backend/models/viking_room.obj",
         )
     }
@@ -277,15 +276,15 @@ impl VulkanApp {
         )?;
 
         let dependent_fields = Self::create_render_command_swap_chain_fields(
-            &self.logical_device, 
-            &texture_image, 
-            &vertex_buffer, 
-            &index_buffer, 
-            &self.command_pool, 
-            &self.dependent_fields.swap_chain_container, 
-            &self.dependent_fields.uniform_buffers, 
-            self.uniform_descriptors, 
-            &self.dependent_fields.framebuffers, 
+            &self.logical_device,
+            &texture_image,
+            &vertex_buffer,
+            &index_buffer,
+            &self.command_pool,
+            &self.dependent_fields.swap_chain_container,
+            &self.dependent_fields.uniform_buffers,
+            self.uniform_descriptors,
+            &self.dependent_fields.framebuffers,
             &self.dependent_fields.graphics_pipeline,
         )?;
 
@@ -404,15 +403,15 @@ impl VulkanApp {
 
         if let Some(render_command) = &mut self.current_render_command {
             render_command.dependent_fields = Self::create_render_command_swap_chain_fields(
-                &self.logical_device, 
-                &render_command.texture_image, 
-                &render_command.vertex_buffer, 
-                &render_command.index_buffer, 
-                &self.command_pool, 
-                &self.dependent_fields.swap_chain_container, 
-                &self.dependent_fields.uniform_buffers, 
-                self.uniform_descriptors, 
-                &self.dependent_fields.framebuffers, 
+                &self.logical_device,
+                &render_command.texture_image,
+                &render_command.vertex_buffer,
+                &render_command.index_buffer,
+                &self.command_pool,
+                &self.dependent_fields.swap_chain_container,
+                &self.dependent_fields.uniform_buffers,
+                self.uniform_descriptors,
+                &self.dependent_fields.framebuffers,
                 &self.dependent_fields.graphics_pipeline,
             )?;
         }
@@ -524,7 +523,10 @@ impl VulkanApp {
             .map(|_x| vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .collect();
 
-        let command_buffer_ptr = RenderCommand::get_command_buffer_at(&self.current_render_command, available_image_index)?;
+        let command_buffer_ptr = RenderCommand::get_command_buffer_at(
+            &self.current_render_command,
+            available_image_index,
+        )?;
 
         let signal_semaphores = [self.sync_container.get_render_finished_semaphore()];
         let signal_semaphores_count = u32::try_from(signal_semaphores.len())?;
@@ -771,8 +773,10 @@ impl VulkanApp {
 }
 
 impl RenderCommand {
-
-    fn get_command_buffer_at(optional_self: &Option<Self>, available_image_index: usize) -> Result<&vk::CommandBuffer> {
+    fn get_command_buffer_at(
+        optional_self: &Option<Self>,
+        available_image_index: usize,
+    ) -> Result<&vk::CommandBuffer> {
         if let Some(render_command) = optional_self {
             if !render_command.dependent_fields.command_buffers.is_empty() {
                 Ok(&render_command.dependent_fields.command_buffers[available_image_index])
@@ -786,14 +790,19 @@ impl RenderCommand {
         }
     }
 
-    unsafe fn cleanup_swap_chain(&mut self, logical_device: &ash::Device, command_pool: vk::CommandPool) {
+    unsafe fn cleanup_swap_chain(
+        &mut self,
+        logical_device: &ash::Device,
+        command_pool: vk::CommandPool,
+    ) {
         // the descriptor sets are cleared automatically when the pool is cleared
-        logical_device.destroy_descriptor_pool(self.dependent_fields.descriptor_data.descriptor_pool, None);
-            
+        logical_device
+            .destroy_descriptor_pool(self.dependent_fields.descriptor_data.descriptor_pool, None);
+
         logical_device.free_command_buffers(command_pool, &self.dependent_fields.command_buffers);
     }
 
-    unsafe fn cleanup(&mut self, logical_device: &ash::Device, command_pool: vk::CommandPool) {       
+    unsafe fn cleanup(&mut self, logical_device: &ash::Device, command_pool: vk::CommandPool) {
         self.cleanup_swap_chain(logical_device, command_pool);
         std::mem::take(&mut self.texture_image).cleanup(logical_device);
         std::mem::take(&mut self.index_buffer).cleanup(logical_device);
@@ -807,7 +816,7 @@ impl Drop for VulkanApp {
         unsafe {
             if let Some(mut render_command) = std::mem::take(&mut self.current_render_command) {
                 render_command.cleanup(&self.logical_device, self.command_pool);
-            }            
+            }
             self.cleanup_swap_chain();
 
             self.logical_device

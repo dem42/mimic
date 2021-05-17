@@ -2,7 +2,7 @@
 members = [
     "demo",
     "mimic",
-    "rustyutil",
+    "mimic_common",
     "mimic_frontend",
     "mimic_vulkan_backend",
 ]

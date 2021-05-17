@@ -1,6 +1,7 @@
 use ash::{vk, InstanceError};
 use image::ImageError;
-use std::{num::TryFromIntError, str::Utf8Error};
+use mimic_common::propagate;
+use std::{ffi::OsString, num::TryFromIntError, str::Utf8Error};
 use thiserror::Error;
 use tobj::LoadError;
 
@@ -47,8 +48,11 @@ pub enum VulkanError {
     #[error("No render command was available")]
     RenderCommandNotAvailable,
     // shaders
-    #[error("Failed to read shader: {0}")]
-    ShaderFileReadFailure(String),
+    #[error("Failed to read shader: {shader_file:?}. Reason: {source:?}")]
+    ShaderFileReadFailure {
+        source: std::io::Error,
+        shader_file: OsString,
+    },
     // swap chain errors
     #[error("Failed to choose a swap chain format")]
     SwapChainFormatsError,
@@ -59,19 +63,42 @@ pub enum VulkanError {
     UniformBufferNotAvailable(usize),
     // fallback errors
     #[error(transparent)]
-    AshInstanceError(#[from] InstanceError),
+    AshInstanceError(InstanceError),
     #[error(transparent)]
-    ImageError(#[from] ImageError),
+    ImageError(ImageError),
     #[error(transparent)]
-    ObjError(#[from] LoadError),
+    ObjError(LoadError),
     #[error(transparent)]
-    OtherVkResult(#[from] vk::Result),
+    OtherVkResult(vk::Result),
     #[error(transparent)]
-    VulkanStringConversionError(#[from] Utf8Error),
+    VulkanStringConversionError(Utf8Error),
     #[error(transparent)]
-    VulkanUsizeConversionError(#[from] TryFromIntError),
+    VulkanUsizeConversionError(TryFromIntError),
     #[error("Failed to create a window")]
     WindowCreateFailure,
     #[error("The platform surface stored in window is incorrect")]
     WindowIncorrectPlatformSurface,
 }
+
+propagate!(
+    VulkanError,
+    AshInstanceError as InstanceError,
+    using_panic_feature
+);
+propagate!(VulkanError, ImageError as ImageError, using_panic_feature);
+propagate!(VulkanError, ObjError as LoadError, using_panic_feature);
+propagate!(
+    VulkanError,
+    OtherVkResult as vk::Result,
+    using_panic_feature
+);
+propagate!(
+    VulkanError,
+    VulkanStringConversionError as Utf8Error,
+    using_panic_feature
+);
+propagate!(
+    VulkanError,
+    VulkanUsizeConversionError as TryFromIntError,
+    using_panic_feature
+);
