@@ -82,20 +82,27 @@ pub struct ShaderCompileParams {
 }
 
 impl ShaderCompileParams {
-    const SHADERS_PATH: &'static str = "./shaders/src";
-    const SHADERS_SPV: &'static str = "./shaders/spv";
+    const SHADERS_PATH: &'static str = "shaders";
+    const SRC_INPUT: &'static str = "src";
+    const SPV_OUTPUT: &'static str = "spv";
 
     /// Creates an instance of shader compile parameters using the default `./shaders/` folder in the crate folder hierarchy.
-    pub fn new(resource_bundle: &ResourceBundle) -> io::Result<Self> {
-        let resource_dir = resource_bundle.resource_dir_path.as_path();
-        let output_dir = resource_dir
-            .join(Self::SHADERS_SPV)
-            .to_owned()
-            .canonicalize()?;
+    pub fn new(resource_bundle: &ResourceBundle, output_resource_folder: &Path) -> io::Result<Self> {
+        let resource_dir = resource_bundle.resource_dir_path.as_path();        
         let input_dir = resource_dir
             .join(Self::SHADERS_PATH)
+            .join(Self::SRC_INPUT)
             .to_owned()
             .canonicalize()?;
+        let output_dir = output_resource_folder
+            .join(Self::SHADERS_PATH)
+            .join(Self::SPV_OUTPUT)
+            .to_owned();
+
+        if !output_dir.is_dir() {
+            fs::create_dir_all(output_dir.as_path())?;
+        }
+        let output_dir = output_dir.canonicalize()?;
 
         // shaders path is where common shaders are stored
         // these should get compiled by this build script

@@ -1,6 +1,6 @@
 use crate::{render_commands::RenderCommands, result::Result, winit_window};
 use log::{error, info};
-use mimic_common::apptime::AppTime;
+use mimic_common::{apptime::AppTime, config::MimicConfig};
 use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -22,7 +22,7 @@ pub struct MainLoopBuilder {
 impl MainLoopBuilder {
     const ENGINE_NAME: &'static str = "Vulkan Engine";
 
-    pub fn new() -> Self {
+    pub fn new() -> Self {        
         Self {
             event_loop: None,
             window: None,
@@ -36,6 +36,7 @@ impl MainLoopBuilder {
         window_width: u32,
         window_height: u32,
     ) -> Result<&mut Self> {
+        let mimic_config = MimicConfig::new()?;
         self.event_loop = Some(EventLoop::new());
         self.window = Some(Self::init_window(
             window_title,
@@ -53,6 +54,7 @@ impl MainLoopBuilder {
             Self::ENGINE_NAME,
             &window_surface,
             &window_size,
+            mimic_config,
         )?;
         vulkan_app.create_default_render_command()?;
         self.vulkan_app = Some(vulkan_app);

@@ -13,7 +13,7 @@ macro_rules! propagate {
         impl std::convert::From<$source> for $wrapper {
             fn from(source: $source) -> Self {
                 if cfg!(feature = "panic_on_error_propagation") {
-                    panic!("Paniced due to attempt to propagate: {}", source)
+                    panic!("Panicked due to attempt to propagate: {}", source)
                 } else {
                     <$wrapper>::$variant(source)
                 }

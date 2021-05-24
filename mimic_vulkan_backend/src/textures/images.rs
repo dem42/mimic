@@ -14,7 +14,7 @@ use ash::{
     vk,
 };
 use image::GenericImageView;
-use std::{cmp::max, convert::TryFrom, f32};
+use std::{cmp::max, convert::TryFrom, f32, path::{Path, PathBuf}};
 
 #[derive(Default)]
 pub struct Image {
@@ -283,7 +283,7 @@ impl Image {
 
 #[derive(Default)]
 pub struct TextureImage {
-    pub name: String,
+    pub name: PathBuf,
     pub image: Image,
     pub view: vk::ImageView,
     pub sampler: vk::Sampler,
@@ -291,7 +291,7 @@ pub struct TextureImage {
 
 impl TextureImage {
     pub fn new(
-        texture_name: &str,
+        texture_name: &Path,
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,

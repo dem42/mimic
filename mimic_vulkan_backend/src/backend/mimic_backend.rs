@@ -32,9 +32,9 @@ use ash::{
     vk,
 };
 use log::info;
-use mimic_common::apptime::AppTime;
+use mimic_common::{apptime::AppTime, config::MimicConfig};
 use nalgebra_glm as glm;
-use std::{convert::TryFrom, ffi::CString, ptr};
+use std::{convert::TryFrom, ffi::CString, path::Path, ptr};
 
 const REQUIRED_QUEUES: [QueueType; 2] = [
     QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS),
@@ -95,6 +95,7 @@ pub struct VulkanApp {
     current_render_command: Option<RenderCommand>,
     sync_container: SynchronizationContainer,
     msaa_samples: vk::SampleCountFlags,
+    resource_resolver: MimicConfig,
     /// This field is used to determine whether the window was resized.
     /// This is for example the case when the graphics display window was resized.
     pub window_resized: bool,
@@ -117,6 +118,7 @@ impl VulkanApp {
         engine_name: &str,
         window_surface: &WindowSurface,
         window_size: &WindowSize,
+        resource_resolver: MimicConfig,
     ) -> Result<Self> {
         let entry = ash::Entry::new().unwrap();
         let validation = VulkanValidation::enabled(util::validation::ValidationOptions::Verbose);
@@ -173,6 +175,7 @@ impl VulkanApp {
             &uniform_descriptors,
             window_size,
             msaa_samples,
+            &resource_resolver,
         )?;
 
         let result = Self {
@@ -192,6 +195,7 @@ impl VulkanApp {
             sync_container,
             msaa_samples,
             current_render_command,
+            resource_resolver,
             window_resized: false,
             window_minimized: false,
         };
@@ -239,12 +243,12 @@ impl VulkanApp {
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
         self.create_render_command(
-            "mimic_vulkan_backend/textures/viking_room.png",
-            "mimic_vulkan_backend/models/viking_room.obj",
+            self.resource_resolver.resolve_resource("res/backend/textures/viking_room.png").as_path(),
+            self.resource_resolver.resolve_resource("res/backend/models/viking_room.obj").as_path(),
         )
     }
 
-    pub fn create_render_command(&mut self, texture_file: &str, model_file: &str) -> Result<()> {
+    pub fn create_render_command(&mut self, texture_file: &Path, model_file: &Path) -> Result<()> {
         let texture_image = TextureImage::new(
             texture_file,
             &self.instance,
@@ -311,6 +315,7 @@ impl VulkanApp {
         uniform_descriptors: &vk::DescriptorSetLayout,
         window_size: &WindowSize,
         msaa_samples: vk::SampleCountFlags,
+        resource_resolver: &MimicConfig,
     ) -> Result<SwapChainDependentFields> {
         let swap_chain_container = SwapChainContainer::new(
             instance,
@@ -330,6 +335,7 @@ impl VulkanApp {
             &swap_chain_container,
             uniform_descriptors,
             msaa_samples,
+            resource_resolver,
         )?;
 
         let color_resource = ColorResource::new(
@@ -399,6 +405,7 @@ impl VulkanApp {
             &self.uniform_descriptors,
             window_size,
             self.msaa_samples,
+            &self.resource_resolver,
         )?;
 
         if let Some(render_command) = &mut self.current_render_command {

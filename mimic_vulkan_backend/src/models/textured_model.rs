@@ -4,7 +4,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use log::info;
-use std::{collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom, path::Path};
 use tobj::load_obj;
 
 pub struct Mesh {
@@ -13,8 +13,8 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new(filepath: &str, loading_props: MeshLoadingFlags) -> Result<Self> {
-        let (models, _materials) = load_obj(filepath, true)?;
+    pub fn new(filepath: &Path, loading_props: MeshLoadingFlags) -> Result<Self> {
+        let (models, _materials) = load_obj(&filepath, true)?;
 
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
@@ -66,7 +66,7 @@ impl Mesh {
                 }
             }
         }
-        info!("Model \"{}\" loaded. Vertices: {}", filepath, idx_cnt);
+        info!("Model \"{:?}\" loaded. Vertices: {}", filepath, idx_cnt);
         Ok(Self { vertices, indices })
     }
 }
