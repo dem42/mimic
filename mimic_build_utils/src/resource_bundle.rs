@@ -11,6 +11,13 @@ pub struct ResourceBundle {
 }
 
 impl ResourceBundle {
+    pub fn new(resource_dir_path: PathBuf) -> Self {
+        println!("cargo:rerun-if-changed={}", resource_dir_path.display());
+        Self {
+            resource_dir_path
+        }
+    }
+
     pub fn copy_bundle_to_location(&self, target_dir: &Path) -> Result<()> {
         let mut accumulated_path = target_dir.to_owned();
         println!("Attempting to create dir {}", accumulated_path.as_path().display());

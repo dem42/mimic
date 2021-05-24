@@ -8,7 +8,6 @@ use crate::{
     util::result::{Result, VulkanError},
 };
 use ash::{version::DeviceV1_0, vk};
-use mimic_common::config::MimicConfig;
 use std::{convert::TryFrom, ffi::CString, path::Path, ptr};
 
 pub struct GraphicsPipeline {
@@ -36,20 +35,21 @@ impl GraphicsPipeline {
     ];
 
     pub fn new(
+        vertex_shader_file: &Path,
+        fragment_shader_file: &Path,
         instance: &ash::Instance,
         logical_device: &ash::Device,
         physical_device: vk::PhysicalDevice,
         swap_chain_container: &SwapChainContainer,
         uniform_descriptors: &vk::DescriptorSetLayout,
         msaa_samples: vk::SampleCountFlags,
-        resource_resolver: &MimicConfig,
     ) -> Result<Self> {
         let vert_shader = create_shader_module(
-            resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv").as_path(),
+            vertex_shader_file,            
             logical_device,
         )?;
         let frag_shader = create_shader_module(
-            resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv").as_path(),
+            fragment_shader_file,
             logical_device,
         )?;
 

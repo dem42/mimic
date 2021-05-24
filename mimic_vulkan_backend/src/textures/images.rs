@@ -14,7 +14,7 @@ use ash::{
     vk,
 };
 use image::GenericImageView;
-use std::{cmp::max, convert::TryFrom, f32, path::{Path, PathBuf}};
+use std::{cmp::max, convert::TryFrom, f32, path::PathBuf};
 
 #[derive(Default)]
 pub struct Image {
@@ -291,7 +291,7 @@ pub struct TextureImage {
 
 impl TextureImage {
     pub fn new(
-        texture_name: &Path,
+        texture_name: PathBuf,
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -299,7 +299,7 @@ impl TextureImage {
         queues: &QueueMap,
         physical_device_properties: &vk::PhysicalDeviceProperties,
     ) -> Result<Self> {
-        let image = image::open(texture_name)?;
+        let image = image::open(texture_name.as_path())?;
 
         let (width, height) = image.dimensions();
         let image_size = (width * height * 4) as vk::DeviceSize;
@@ -385,7 +385,7 @@ impl TextureImage {
         )?;
 
         Ok(Self {
-            name: texture_name.to_owned(),
+            name: texture_name,
             image: texture_image,
             view,
             sampler,

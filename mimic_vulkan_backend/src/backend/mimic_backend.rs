@@ -34,7 +34,7 @@ use ash::{
 use log::info;
 use mimic_common::{apptime::AppTime, config::MimicConfig};
 use nalgebra_glm as glm;
-use std::{convert::TryFrom, ffi::CString, path::Path, ptr};
+use std::{convert::TryFrom, ffi::CString, path::{Path, PathBuf}, ptr};
 
 const REQUIRED_QUEUES: [QueueType; 2] = [
     QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS),
@@ -53,14 +53,18 @@ fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFe
 struct RenderCommandSwapChainFields {
     descriptor_data: DescriptorData,
     command_buffers: Vec<vk::CommandBuffer>,
+    graphics_pipeline: GraphicsPipeline,
+    framebuffers: Vec<vk::Framebuffer>,
 }
 
 struct RenderCommand {
+    vertex_shader_file: PathBuf,
+    fragment_shader_file: PathBuf,
     _model: Mesh,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     texture_image: TextureImage,
-    dependent_fields: RenderCommandSwapChainFields,
+    dependent_fields: RenderCommandSwapChainFields,    
 }
 
 /// This structure wraps all the objects that depend on the swap-chain in order to be able to recreate them when the swap-chain images change.
@@ -69,10 +73,10 @@ struct RenderCommand {
 struct SwapChainDependentFields {
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
-    graphics_pipeline: GraphicsPipeline,
+    //graphics_pipeline: GraphicsPipeline,
     color_resource: ColorResource,
     depth_resource: DepthResource,
-    framebuffers: Vec<vk::Framebuffer>,
+    //framebuffers: Vec<vk::Framebuffer>,
     uniform_buffers: Vec<Buffer>,
 }
 
@@ -95,7 +99,8 @@ pub struct VulkanApp {
     current_render_command: Option<RenderCommand>,
     sync_container: SynchronizationContainer,
     msaa_samples: vk::SampleCountFlags,
-    resource_resolver: MimicConfig,
+    /// resolve resource files
+    pub resource_resolver: MimicConfig,
     /// This field is used to determine whether the window was resized.
     /// This is for example the case when the graphics display window was resized.
     pub window_resized: bool,
@@ -172,10 +177,8 @@ impl VulkanApp {
             &surface_container,
             &command_pool,
             &queues,
-            &uniform_descriptors,
             window_size,
             msaa_samples,
-            &resource_resolver,
         )?;
 
         let result = Self {
@@ -204,22 +207,45 @@ impl VulkanApp {
     }
 
     fn create_render_command_swap_chain_fields(
+        vertex_shader_file: &Path,
+        fragment_shader_file: &Path,
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
         texture_image: &TextureImage,
         vertex_buffer: &VertexBuffer,
         index_buffer: &IndexBuffer,
         command_pool: &vk::CommandPool,
-        swap_chain_container: &SwapChainContainer,
-        uniform_buffers: &Vec<Buffer>,
-        uniform_descriptors: vk::DescriptorSetLayout,
-        framebuffers: &Vec<vk::Framebuffer>,
-        graphics_pipeline: &GraphicsPipeline,
+        uniform_descriptors: vk::DescriptorSetLayout,        
+        swap_chain_dependent_fields: &SwapChainDependentFields,
+        msaa_samples: vk::SampleCountFlags,
     ) -> Result<RenderCommandSwapChainFields> {
+
+        let graphics_pipeline = GraphicsPipeline::new(
+            vertex_shader_file,
+            fragment_shader_file,
+            instance,
+            logical_device,
+            physical_device,
+            &swap_chain_dependent_fields.swap_chain_container,
+            &uniform_descriptors,
+            msaa_samples,
+        )?;
+        
+        let framebuffers = framebuffers::create_framebuffers(
+            logical_device,
+            &graphics_pipeline,
+            &swap_chain_dependent_fields.image_views_container,
+            swap_chain_dependent_fields.depth_resource.depth_image_view,
+            &swap_chain_dependent_fields.color_resource,
+            &swap_chain_dependent_fields.swap_chain_container,
+        )?;
+
         let descriptor_data = DescriptorData::new(
             logical_device,
-            swap_chain_container,
+            &swap_chain_dependent_fields.swap_chain_container,
             uniform_descriptors,
-            uniform_buffers,
+            &swap_chain_dependent_fields.uniform_buffers,
             texture_image,
         )?;
 
@@ -227,9 +253,9 @@ impl VulkanApp {
         let command_buffers = command_buffers::create_command_buffers(
             logical_device,
             command_pool,
-            framebuffers,
-            graphics_pipeline,
-            swap_chain_container,
+            &framebuffers,
+            &graphics_pipeline,
+            &swap_chain_dependent_fields.swap_chain_container,
             vertex_buffer,
             index_buffer,
             &descriptor_data,
@@ -238,17 +264,34 @@ impl VulkanApp {
         Ok(RenderCommandSwapChainFields {
             descriptor_data,
             command_buffers,
+            graphics_pipeline,
+            framebuffers,
         })
     }
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
         self.create_render_command(
-            self.resource_resolver.resolve_resource("res/backend/textures/viking_room.png").as_path(),
-            self.resource_resolver.resolve_resource("res/backend/models/viking_room.obj").as_path(),
+            self.resource_resolver.resolve_resource("res/backend/textures/viking_room.png"),
+            self.resource_resolver.resolve_resource("res/backend/models/viking_room.obj"),
+            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv"),
+            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv"),
         )
     }
 
-    pub fn create_render_command(&mut self, texture_file: &Path, model_file: &Path) -> Result<()> {
+    pub fn create_render_command(
+        &mut self, 
+        texture_file: PathBuf, 
+        model_file: PathBuf,
+        vertex_shader_file: PathBuf,
+        fragment_shader_file: PathBuf,
+    ) -> Result<()> {
+
+        // we are removing the previous render command so we must block until we are done using it and then clean it up
+        unsafe { self.logical_device.device_wait_idle()?; }
+        if let Some(render_command) = &mut self.current_render_command {
+            unsafe { render_command.cleanup(&self.logical_device, self.command_pool); }
+        }
+
         let texture_image = TextureImage::new(
             texture_file,
             &self.instance,
@@ -259,7 +302,7 @@ impl VulkanApp {
             &self.physical_device_properties,
         )?;
 
-        let model = Mesh::new(model_file, MeshLoadingFlags::INVERTED_UP)?;
+        let model = Mesh::new(model_file.as_path(), MeshLoadingFlags::INVERTED_UP)?;
 
         let vertex_buffer = VertexBuffer::new(
             &model.vertices,
@@ -280,19 +323,23 @@ impl VulkanApp {
         )?;
 
         let dependent_fields = Self::create_render_command_swap_chain_fields(
+            vertex_shader_file.as_path(),
+            fragment_shader_file.as_path(),
+            &self.instance,
+            self.physical_device,
             &self.logical_device,
             &texture_image,
             &vertex_buffer,
             &index_buffer,
             &self.command_pool,
-            &self.dependent_fields.swap_chain_container,
-            &self.dependent_fields.uniform_buffers,
             self.uniform_descriptors,
-            &self.dependent_fields.framebuffers,
-            &self.dependent_fields.graphics_pipeline,
+            &self.dependent_fields,
+            self.msaa_samples,
         )?;
 
         self.current_render_command = Some(RenderCommand {
+            vertex_shader_file,
+            fragment_shader_file,
             _model: model,
             vertex_buffer,
             index_buffer,
@@ -312,10 +359,8 @@ impl VulkanApp {
         surface_container: &SurfaceContainer,
         command_pool: &vk::CommandPool,
         queues: &QueueMap,
-        uniform_descriptors: &vk::DescriptorSetLayout,
         window_size: &WindowSize,
         msaa_samples: vk::SampleCountFlags,
-        resource_resolver: &MimicConfig,
     ) -> Result<SwapChainDependentFields> {
         let swap_chain_container = SwapChainContainer::new(
             instance,
@@ -327,16 +372,6 @@ impl VulkanApp {
         )?;
 
         let image_views_container = ImageViews::new(logical_device, &swap_chain_container)?;
-
-        let graphics_pipeline = GraphicsPipeline::new(
-            instance,
-            logical_device,
-            physical_device,
-            &swap_chain_container,
-            uniform_descriptors,
-            msaa_samples,
-            resource_resolver,
-        )?;
 
         let color_resource = ColorResource::new(
             msaa_samples,
@@ -356,15 +391,6 @@ impl VulkanApp {
             queues,
         )?;
 
-        let framebuffers = framebuffers::create_framebuffers(
-            logical_device,
-            &graphics_pipeline,
-            &image_views_container,
-            depth_resource.depth_image_view,
-            &color_resource,
-            &swap_chain_container,
-        )?;
-
         let uniform_buffers = uniforms::buffers::create_uniform_buffers(
             instance,
             physical_device,
@@ -375,10 +401,8 @@ impl VulkanApp {
         Ok(SwapChainDependentFields {
             swap_chain_container,
             image_views_container,
-            graphics_pipeline,
             color_resource,
             depth_resource,
-            framebuffers,
             uniform_buffers,
         })
     }
@@ -402,24 +426,24 @@ impl VulkanApp {
             &self.surface_container,
             &self.command_pool,
             &self.queues,
-            &self.uniform_descriptors,
             window_size,
             self.msaa_samples,
-            &self.resource_resolver,
         )?;
 
         if let Some(render_command) = &mut self.current_render_command {
             render_command.dependent_fields = Self::create_render_command_swap_chain_fields(
+                render_command.vertex_shader_file.as_path(),
+                render_command.fragment_shader_file.as_path(),
+                &self.instance,
+                self.physical_device,
                 &self.logical_device,
                 &render_command.texture_image,
                 &render_command.vertex_buffer,
                 &render_command.index_buffer,
-                &self.command_pool,
-                &self.dependent_fields.swap_chain_container,
-                &self.dependent_fields.uniform_buffers,
+                &self.command_pool,                
                 self.uniform_descriptors,
-                &self.dependent_fields.framebuffers,
-                &self.dependent_fields.graphics_pipeline,
+                &self.dependent_fields,
+                self.msaa_samples,
             )?;
         }
 
@@ -749,26 +773,12 @@ impl VulkanApp {
         std::mem::take(&mut self.dependent_fields.color_resource).drop(&self.logical_device);
         std::mem::take(&mut self.dependent_fields.depth_resource).drop(&self.logical_device);
 
-        for framebuffer in self.dependent_fields.framebuffers.iter() {
-            self.logical_device.destroy_framebuffer(*framebuffer, None);
-        }
-
         for uniform_buffer in self.dependent_fields.uniform_buffers.iter() {
             self.logical_device
                 .destroy_buffer(uniform_buffer.buffer, None);
             self.logical_device.free_memory(uniform_buffer.memory, None);
         }
-
-        self.logical_device
-            .destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
-        self.logical_device.destroy_pipeline_layout(
-            self.dependent_fields.graphics_pipeline.pipeline_layout,
-            None,
-        );
-
-        self.logical_device
-            .destroy_render_pass(self.dependent_fields.graphics_pipeline.render_pass, None);
-
+        
         for &image_view in &self.dependent_fields.image_views_container.image_views {
             self.logical_device.destroy_image_view(image_view, None);
         }
@@ -802,6 +812,20 @@ impl RenderCommand {
         logical_device: &ash::Device,
         command_pool: vk::CommandPool,
     ) {
+        for framebuffer in self.dependent_fields.framebuffers.iter() {
+            logical_device.destroy_framebuffer(*framebuffer, None);
+        }
+
+        logical_device
+            .destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
+        logical_device.destroy_pipeline_layout(
+            self.dependent_fields.graphics_pipeline.pipeline_layout,
+            None,
+        );
+
+        logical_device
+            .destroy_render_pass(self.dependent_fields.graphics_pipeline.render_pass, None);
+
         // the descriptor sets are cleared automatically when the pool is cleared
         logical_device
             .destroy_descriptor_pool(self.dependent_fields.descriptor_data.descriptor_pool, None);
@@ -811,6 +835,7 @@ impl RenderCommand {
 
     unsafe fn cleanup(&mut self, logical_device: &ash::Device, command_pool: vk::CommandPool) {
         self.cleanup_swap_chain(logical_device, command_pool);
+
         std::mem::take(&mut self.texture_image).cleanup(logical_device);
         std::mem::take(&mut self.index_buffer).cleanup(logical_device);
         std::mem::take(&mut self.vertex_buffer).cleanup(logical_device);

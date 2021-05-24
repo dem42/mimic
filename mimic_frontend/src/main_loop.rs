@@ -1,4 +1,4 @@
-use crate::{render_commands::RenderCommands, result::Result, winit_window};
+use crate::{render_commands::{RenderCommand, RenderCommands}, result::Result, winit_window};
 use log::{error, info};
 use mimic_common::{apptime::AppTime, config::MimicConfig};
 use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
@@ -8,7 +8,7 @@ use winit::{
 };
 
 pub trait Application {
-    fn update(&mut self, render_commands: &mut RenderCommands, apptime: &AppTime);
+    fn update(&mut self, render_commands: &mut RenderCommands, apptime: &AppTime, config: &MimicConfig);
 }
 
 /// This struct represent the 3D renderer main loop.
@@ -127,7 +127,21 @@ impl MainLoopBuilder {
                         error!("Failed to update app time: {}", error);
                         Self::exit(control_flow);
                     } else {
-                        application.update(&mut render_commands, &apptime);
+                        application.update(&mut render_commands, &apptime, &vulkan_app.resource_resolver);
+
+                        for render_command in render_commands.command_queue.drain(..) {
+                            match render_command {
+                                RenderCommand::DrawObject{ texture_file, model_file, vertex_shader_file, fragment_shader_file} => {
+                                    let result = vulkan_app.create_render_command(
+                                        texture_file, model_file, vertex_shader_file, fragment_shader_file
+                                    );
+                                    if let Err(error) = result {
+                                        error!("Failed draw object operation: {}", error);
+                                        Self::exit(control_flow);
+                                    }
+                                }
+                            }
+                        }
 
                         if render_commands.request_redraw {
                             winit_window.request_redraw();

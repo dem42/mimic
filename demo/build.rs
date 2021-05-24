@@ -6,9 +6,7 @@ fn main() {
 
     // manifest dir is where the Cargo.toml is for this crate. We can use it know the directory of source files and resources
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let demo_resource_bundle = ResourceBundle {
-        resource_dir_path: PathBuf::from(manifest_dir).join("res"),
-    };
+    let demo_resource_bundle = ResourceBundle::new(PathBuf::from(manifest_dir).join("res"));
 
     let output_dir = env::var_os("OUT_DIR").unwrap();
     println!("cargo:warning={:?}", output_dir);

@@ -1,5 +1,5 @@
 use log::info;
-use mimic_common::apptime::AppTime;
+use mimic_common::{apptime::AppTime, config::MimicConfig};
 use mimic_frontend::{
     main_loop::{Application, MainLoopBuilder},
     render_commands::RenderCommands,
@@ -13,7 +13,7 @@ const WINDOW_HEIGHT: u32 = 600;
 struct Test;
 
 impl Application for Test {
-    fn update(&mut self, render_commands: &mut RenderCommands, apptime: &AppTime) {
+    fn update(&mut self, render_commands: &mut RenderCommands, _apptime: &AppTime, _resource_resolver: &MimicConfig) {
         render_commands.request_redraw = true;
     }
 }

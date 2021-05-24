@@ -5,9 +5,7 @@ fn main() {
     println!("Building crate mimic_vulkan_backend");
 
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let vulkan_backend_resource_bundle = ResourceBundle {
-        resource_dir_path: PathBuf::from(manifest_dir).join("res"),
-    };
+    let vulkan_backend_resource_bundle = ResourceBundle::new(PathBuf::from(manifest_dir).join("res"));
 
     let output_dir = env::var_os("OUT_DIR").unwrap();
     let output_dir = get_target_from_out_dir(Path::new(&output_dir).to_owned()).unwrap();
