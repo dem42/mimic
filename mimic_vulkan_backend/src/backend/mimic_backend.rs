@@ -271,10 +271,10 @@ impl VulkanApp {
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
         self.create_render_command(
-            self.resource_resolver.resolve_resource("res/backend/textures/viking_room.png"),
-            self.resource_resolver.resolve_resource("res/backend/models/viking_room.obj"),
-            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv"),
-            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv"),
+            self.resource_resolver.resolve_resource("res/backend/textures/viking_room.png")?,
+            self.resource_resolver.resolve_resource("res/backend/models/viking_room.obj")?,
+            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv")?,
+            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv")?,
         )
     }
 

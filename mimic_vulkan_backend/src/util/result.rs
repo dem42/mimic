@@ -1,6 +1,6 @@
 use ash::{vk, InstanceError};
 use image::ImageError;
-use mimic_common::propagate;
+use mimic_common::{propagate, result::MimicCommonError};
 use std::{ffi::OsString, num::TryFromIntError, str::Utf8Error};
 use thiserror::Error;
 use tobj::LoadError;
@@ -26,6 +26,9 @@ pub enum VulkanError {
     // memory
     #[error("Failed to find suitable memory type")]
     MemoryFailedToFindType,
+    // propagating common errors
+    #[error(transparent)]
+    MimicCommonError(MimicCommonError),
     // validation
     #[error("No available layers")]
     NoValidationLayers,
@@ -43,7 +46,7 @@ pub enum VulkanError {
     PipelineCreateError,
     // validation
     #[error("Not all required validation layers are supported")]
-    RequiredValidationLayersUnsupported,
+    RequiredValidationLayersUnsupported,    
     // render commands
     #[error("No render command was available")]
     RenderCommandNotAvailable,
@@ -100,5 +103,10 @@ propagate!(
 propagate!(
     VulkanError,
     VulkanUsizeConversionError as TryFromIntError,
+    using_panic_feature
+);
+propagate!(
+    VulkanError,
+    MimicCommonError as MimicCommonError,
     using_panic_feature
 );

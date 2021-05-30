@@ -1,4 +1,4 @@
-use std::io;
+use std::{ffi::OsString, io};
 
 use crate::propagate;
 use thiserror::Error;
@@ -11,6 +11,8 @@ pub enum MimicCommonError {
     ExecutableBaseDirError,
     #[error(transparent)]
     IOError(io::Error),
+    #[error("Resource {0:?} failed to resolve")]
+    ResourceFailedToResolve(OsString),
 }
 
 propagate!(MimicCommonError, IOError as io::Error, using_panic_feature);
