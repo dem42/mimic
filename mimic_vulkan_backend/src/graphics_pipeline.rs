@@ -44,14 +44,8 @@ impl GraphicsPipeline {
         uniform_descriptors: &vk::DescriptorSetLayout,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
-        let vert_shader = create_shader_module(
-            vertex_shader_file,            
-            logical_device,
-        )?;
-        let frag_shader = create_shader_module(
-            fragment_shader_file,
-            logical_device,
-        )?;
+        let vert_shader = create_shader_module(vertex_shader_file, logical_device)?;
+        let frag_shader = create_shader_module(fragment_shader_file, logical_device)?;
 
         let main_function = match CString::new("main") {
             Ok(value) => value,

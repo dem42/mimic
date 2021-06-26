@@ -15,6 +15,10 @@ pub enum MimicError {
     WinitOSError(OsError),
 }
 
-propagate!(MimicError, MimicCommonError as MimicCommonError, using_panic_feature);
+propagate!(
+    MimicError,
+    MimicCommonError as MimicCommonError,
+    using_panic_feature
+);
 propagate!(MimicError, VulkanError as VulkanError, using_panic_feature);
 propagate!(MimicError, WinitOSError as OsError, using_panic_feature);

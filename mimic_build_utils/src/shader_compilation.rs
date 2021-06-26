@@ -87,8 +87,11 @@ impl ShaderCompileParams {
     const SPV_OUTPUT: &'static str = "spv";
 
     /// Creates an instance of shader compile parameters using the default `./shaders/` folder in the crate folder hierarchy.
-    pub fn new(resource_bundle: &ResourceBundle, output_resource_folder: &Path) -> io::Result<Self> {
-        let resource_dir = resource_bundle.resource_dir_path.as_path();        
+    pub fn new(
+        resource_bundle: &ResourceBundle,
+        output_resource_folder: &Path,
+    ) -> io::Result<Self> {
+        let resource_dir = resource_bundle.resource_dir_path.as_path();
         let input_dir = resource_dir
             .join(Self::SHADERS_PATH)
             .join(Self::SRC_INPUT)

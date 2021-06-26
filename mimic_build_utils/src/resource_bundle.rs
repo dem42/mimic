@@ -13,14 +13,15 @@ pub struct ResourceBundle {
 impl ResourceBundle {
     pub fn new(resource_dir_path: PathBuf) -> Self {
         println!("cargo:rerun-if-changed={}", resource_dir_path.display());
-        Self {
-            resource_dir_path
-        }
+        Self { resource_dir_path }
     }
 
     pub fn copy_bundle_to_location(&self, target_dir: &Path) -> Result<()> {
         let mut accumulated_path = target_dir.to_owned();
-        println!("Attempting to create dir {}", accumulated_path.as_path().display());
+        println!(
+            "Attempting to create dir {}",
+            accumulated_path.as_path().display()
+        );
         if !accumulated_path.is_dir() {
             fs::create_dir(accumulated_path.as_path())?;
         }
@@ -40,7 +41,11 @@ impl ResourceBundle {
                     }
                     Self::copy_recursive(&path, accumulated_path)?;
                 } else {
-                    println!("Attempting to copy {} to {}", path.display(), accumulated_path.as_path().display());
+                    println!(
+                        "Attempting to copy {} to {}",
+                        path.display(),
+                        accumulated_path.as_path().display()
+                    );
                     fs::copy(path, accumulated_path.as_path())?;
                 }
                 accumulated_path.pop();

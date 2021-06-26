@@ -46,7 +46,7 @@ pub enum VulkanError {
     PipelineCreateError,
     // validation
     #[error("Not all required validation layers are supported")]
-    RequiredValidationLayersUnsupported,    
+    RequiredValidationLayersUnsupported,
     // render commands
     #[error("No render command was available")]
     RenderCommandNotAvailable,

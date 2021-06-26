@@ -32,25 +32,32 @@ use ash::{
     vk,
 };
 use log::info;
-use mimic_common::{apptime::AppTime, config::MimicConfig};
-use nalgebra_glm as glm;
-use std::{convert::TryFrom, ffi::CString, path::{Path, PathBuf}, ptr};
-
+use mimic_common::{
+    apptime::AppTime,
+    config::MimicConfig,
+    uniforms::{update_uniform_buffer, UniformBufferObject, UniformMetadata, UniformUpdateInput},
+};
+use std::{
+    convert::TryFrom,
+    ffi::CString,
+    path::{Path, PathBuf},
+    ptr,
+};
+//////////////////////// Consts ///////////////////////
 const REQUIRED_QUEUES: [QueueType; 2] = [
     QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS),
     QueueType::PresentQueue,
 ];
 const DEVICE_EXTENSIONS: [&'static str; 1] = ["VK_KHR_swapchain"];
-
-fn is_swap_chain_adequate(swap_chain_details: &SwapChainSupportDetails) -> bool {
-    !swap_chain_details.formats.is_empty() && !swap_chain_details.present_modes.is_empty()
+//////////////////////// Enums ///////////////////////
+/// This enum informs us during which part of the draw-frame process a window resize happened
+enum ResizeDetectedLocation {
+    InAcquire,
+    InPresent,
 }
-
-fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFeatures) -> bool {
-    physical_device_featrues.sampler_anisotropy == vk::TRUE
-}
-
+//////////////////////// Structs ///////////////////////
 struct RenderCommandSwapChainFields {
+    uniform_buffers: Vec<Buffer>,
     descriptor_data: DescriptorData,
     command_buffers: Vec<vk::CommandBuffer>,
     graphics_pipeline: GraphicsPipeline,
@@ -60,11 +67,12 @@ struct RenderCommandSwapChainFields {
 struct RenderCommand {
     vertex_shader_file: PathBuf,
     fragment_shader_file: PathBuf,
+    uniform_metadata: UniformMetadata,
     _model: Mesh,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     texture_image: TextureImage,
-    dependent_fields: RenderCommandSwapChainFields,    
+    dependent_fields: RenderCommandSwapChainFields,
 }
 
 /// This structure wraps all the objects that depend on the swap-chain in order to be able to recreate them when the swap-chain images change.
@@ -73,11 +81,8 @@ struct RenderCommand {
 struct SwapChainDependentFields {
     swap_chain_container: SwapChainContainer,
     image_views_container: ImageViews,
-    //graphics_pipeline: GraphicsPipeline,
     color_resource: ColorResource,
     depth_resource: DepthResource,
-    //framebuffers: Vec<vk::Framebuffer>,
-    uniform_buffers: Vec<Buffer>,
 }
 
 /// A structure that represents a vulkan application.
@@ -108,13 +113,7 @@ pub struct VulkanApp {
     /// When the window is minimized then nothing needs to be rendered.
     pub window_minimized: bool,
 }
-
-/// This enum informs us during which part of the draw-frame process a window resize happened
-enum ResizeDetectedLocation {
-    InAcquire,
-    InPresent,
-}
-
+//////////////////////// Impls ///////////////////////
 impl VulkanApp {
     /// Constructs a new `VulkanApp` with the provided window title and engine name.
     // It creates a swap-chain using the `window_surface` and `window_size`.
@@ -209,6 +208,7 @@ impl VulkanApp {
     fn create_render_command_swap_chain_fields(
         vertex_shader_file: &Path,
         fragment_shader_file: &Path,
+        uniform_metadata: &UniformMetadata,
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -216,11 +216,10 @@ impl VulkanApp {
         vertex_buffer: &VertexBuffer,
         index_buffer: &IndexBuffer,
         command_pool: &vk::CommandPool,
-        uniform_descriptors: vk::DescriptorSetLayout,        
+        uniform_descriptors: vk::DescriptorSetLayout,
         swap_chain_dependent_fields: &SwapChainDependentFields,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<RenderCommandSwapChainFields> {
-
         let graphics_pipeline = GraphicsPipeline::new(
             vertex_shader_file,
             fragment_shader_file,
@@ -231,7 +230,7 @@ impl VulkanApp {
             &uniform_descriptors,
             msaa_samples,
         )?;
-        
+
         let framebuffers = framebuffers::create_framebuffers(
             logical_device,
             &graphics_pipeline,
@@ -241,11 +240,20 @@ impl VulkanApp {
             &swap_chain_dependent_fields.swap_chain_container,
         )?;
 
+        let uniform_buffers = uniforms::buffers::create_uniform_buffers(
+            uniform_metadata.uniform_buffer_size,
+            instance,
+            physical_device,
+            logical_device,
+            &swap_chain_dependent_fields.swap_chain_container,
+        )?;
+
         let descriptor_data = DescriptorData::new(
+            uniform_metadata,
             logical_device,
             &swap_chain_dependent_fields.swap_chain_container,
             uniform_descriptors,
-            &swap_chain_dependent_fields.uniform_buffers,
+            &uniform_buffers,
             texture_image,
         )?;
 
@@ -262,6 +270,7 @@ impl VulkanApp {
         )?;
 
         Ok(RenderCommandSwapChainFields {
+            uniform_buffers,
             descriptor_data,
             command_buffers,
             graphics_pipeline,
@@ -271,25 +280,34 @@ impl VulkanApp {
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
         self.create_render_command(
-            self.resource_resolver.resolve_resource("res/backend/textures/viking_room.png")?,
-            self.resource_resolver.resolve_resource("res/backend/models/viking_room.obj")?,
-            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv")?,
-            self.resource_resolver.resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv")?,
+            self.resource_resolver
+                .resolve_resource("res/backend/textures/viking_room.png")?,
+            self.resource_resolver
+                .resolve_resource("res/backend/models/viking_room.obj")?,
+            self.resource_resolver
+                .resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv")?,
+            self.resource_resolver
+                .resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv")?,
+            UniformMetadata::new::<UniformBufferObject>(update_uniform_buffer),
         )
     }
 
     pub fn create_render_command(
-        &mut self, 
-        texture_file: PathBuf, 
+        &mut self,
+        texture_file: PathBuf,
         model_file: PathBuf,
         vertex_shader_file: PathBuf,
         fragment_shader_file: PathBuf,
+        uniform_metadata: UniformMetadata,
     ) -> Result<()> {
-
         // we are removing the previous render command so we must block until we are done using it and then clean it up
-        unsafe { self.logical_device.device_wait_idle()?; }
+        unsafe {
+            self.logical_device.device_wait_idle()?;
+        }
         if let Some(render_command) = &mut self.current_render_command {
-            unsafe { render_command.cleanup(&self.logical_device, self.command_pool); }
+            unsafe {
+                render_command.cleanup(&self.logical_device, self.command_pool);
+            }
         }
 
         let texture_image = TextureImage::new(
@@ -325,6 +343,7 @@ impl VulkanApp {
         let dependent_fields = Self::create_render_command_swap_chain_fields(
             vertex_shader_file.as_path(),
             fragment_shader_file.as_path(),
+            &uniform_metadata,
             &self.instance,
             self.physical_device,
             &self.logical_device,
@@ -340,6 +359,7 @@ impl VulkanApp {
         self.current_render_command = Some(RenderCommand {
             vertex_shader_file,
             fragment_shader_file,
+            uniform_metadata,
             _model: model,
             vertex_buffer,
             index_buffer,
@@ -391,19 +411,11 @@ impl VulkanApp {
             queues,
         )?;
 
-        let uniform_buffers = uniforms::buffers::create_uniform_buffers(
-            instance,
-            physical_device,
-            logical_device,
-            &swap_chain_container,
-        )?;
-
         Ok(SwapChainDependentFields {
             swap_chain_container,
             image_views_container,
             color_resource,
             depth_resource,
-            uniform_buffers,
         })
     }
 
@@ -434,13 +446,14 @@ impl VulkanApp {
             render_command.dependent_fields = Self::create_render_command_swap_chain_fields(
                 render_command.vertex_shader_file.as_path(),
                 render_command.fragment_shader_file.as_path(),
+                &render_command.uniform_metadata,
                 &self.instance,
                 self.physical_device,
                 &self.logical_device,
                 &render_command.texture_image,
                 &render_command.vertex_buffer,
                 &render_command.index_buffer,
-                &self.command_pool,                
+                &self.command_pool,
                 self.uniform_descriptors,
                 &self.dependent_fields,
                 self.msaa_samples,
@@ -543,7 +556,20 @@ impl VulkanApp {
         );
 
         // after image is acquired from swap chain we can update the uniform buffer for that swap chain
-        self.update_uniform_buffer(available_image_index, apptime)?;
+        let uniform_update_input = UniformUpdateInput {
+            swapchain_image_width: self
+                .dependent_fields
+                .swap_chain_container
+                .swap_chain_extent
+                .width,
+            swapchain_image_height: self
+                .dependent_fields
+                .swap_chain_container
+                .swap_chain_extent
+                .height,
+            apptime,
+        };
+        self.update_uniform(uniform_update_input, available_image_index)?;
 
         // specify that we want to delay the execution of the submit of the command buffer
         // specificially, we want to wait until the wiriting to the color attachment is done on the available image
@@ -615,115 +641,39 @@ impl VulkanApp {
         Ok(())
     }
 
-    /// Refreshes the uniform buffer with new data that we want to pass into shaders.
-    /// The purpose of uniform buffers is to contain data that shaders read. This may be things like transformation matrices needed for 3D rendering.
-    fn update_uniform_buffer(&mut self, image_index: usize, apptime: &AppTime) -> Result<()> {
-        let angle_rad = 0.0; //apptime.elapsed.as_secs_f32() * std::f32::consts::PI / 2.0;
-                             // our models for some reason are rotated such that up is z instead of y
-        let up_vector = glm::Vec3::new(0., 0., 1.);
-        let model = glm::rotate(&glm::Mat4::identity(), angle_rad, &up_vector);
-
-        let view = glm::look_at(
-            &glm::Vec3::new(2., 2., 2.),
-            &glm::Vec3::new(0., 0., 0.),
-            &up_vector,
-        );
-
-        let aspect_ratio = self
-            .dependent_fields
-            .swap_chain_container
-            .swap_chain_extent
-            .width as f32
-            / self
-                .dependent_fields
-                .swap_chain_container
-                .swap_chain_extent
-                .height as f32;
-
-        // applying some corrections here because this calculation is for opengl
-        // and we have vulkan where in ndc coords the y axis points down
-        // also it doesn't use reverse depth
-        let mut proj = glm::perspective_fov_rh_zo(
-            45.0 * std::f32::consts::PI / 180.0,
-            self.dependent_fields
-                .swap_chain_container
-                .swap_chain_extent
-                .width as f32,
-            self.dependent_fields
-                .swap_chain_container
-                .swap_chain_extent
-                .height as f32,
-            0.1,
-            10.0,
-        );
-
-        if apptime.frame % 1000 == 0 {
-            let focal_length = 1.0 / ((45.0 * std::f32::consts::PI / 180.0) / 2.0).tan();
-            let a = 10.0 / (0.1 - 10.0);
-            let b = (0.1 * 10.0) / (0.1 - 10.0);
-            info!(
-                "{}, {}, {}, {}",
-                focal_length / aspect_ratio,
-                -focal_length,
-                a,
-                b
-            );
-            info!(
-                "Proj:\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]",
-                proj.m11,
-                proj.m12,
-                proj.m13,
-                proj.m14,
-                proj.m21,
-                proj.m22,
-                proj.m23,
-                proj.m24,
-                proj.m31,
-                proj.m32,
-                proj.m33,
-                proj.m34,
-                proj.m41,
-                proj.m42,
-                proj.m43,
-                proj.m44,
-            );
-        }
-
-        // the vulkan NDC plane is Y-axis pointing down
-        // glm::perspective gives us th opengl computation which has Y-axis pointing up
-        // so we need to change the scale of the y axis
-        proj.m22 *= -1.0;
-
-        let ubos = [uniforms::buffers::UniformBufferObject {
-            force_align_wrapper: uniforms::buffers::ForceAlignWrapper {
-                foo: glm::Vec2::new(0., 0.),
-            },
-            model,
-            view,
-            proj,
-        }];
-
-        if image_index >= self.dependent_fields.uniform_buffers.len() {
-            return Err(VulkanError::UniformBufferNotAvailable(image_index));
-        }
-
-        unsafe {
-            memory::fill_buffer(
-                &self.logical_device,
-                self.dependent_fields.uniform_buffers[image_index].memory,
-                &ubos,
-            )?;
-        }
-
-        Ok(())
-    }
-
     /// Block until all operations on queues are done.
     pub fn wait_until_device_idle(&self) -> Result<()> {
         unsafe {
             self.logical_device.device_wait_idle()?;
         }
         Ok(())
+    }
+
+    /// This function fills the device memory with the the uniform data.
+    /// Uniforms objects are something that only the user of mimic knows about.
+    /// As far as mimic is concerned everything around a uniform (its type, its size) is encapsulated inside the uniform_metadata on the rendercommand
+    /// However, we still need to update the uniforms and ensure that this happens with the correct synchronization barriers
+    pub fn update_uniform(
+        &self,
+        frame_data_input: UniformUpdateInput,
+        swapchain_image_index: usize,
+    ) -> Result<()> {
+        if let Some(render_command) = &self.current_render_command {
+            if swapchain_image_index >= render_command.dependent_fields.uniform_buffers.len() {
+                return Err(VulkanError::UniformBufferNotAvailable(
+                    swapchain_image_index,
+                ));
+            }
+            memory::fill_uniform_buffer(
+                frame_data_input,
+                &render_command.uniform_metadata,
+                &self.logical_device,
+                render_command.dependent_fields.uniform_buffers[swapchain_image_index].memory,
+            )?;
+            Ok(())
+        } else {
+            Err(VulkanError::RenderCommandNotAvailable)
+        }
     }
 
     /// Create an Ash instance.
@@ -773,12 +723,6 @@ impl VulkanApp {
         std::mem::take(&mut self.dependent_fields.color_resource).drop(&self.logical_device);
         std::mem::take(&mut self.dependent_fields.depth_resource).drop(&self.logical_device);
 
-        for uniform_buffer in self.dependent_fields.uniform_buffers.iter() {
-            self.logical_device
-                .destroy_buffer(uniform_buffer.buffer, None);
-            self.logical_device.free_memory(uniform_buffer.memory, None);
-        }
-        
         for &image_view in &self.dependent_fields.image_views_container.image_views {
             self.logical_device.destroy_image_view(image_view, None);
         }
@@ -812,12 +756,16 @@ impl RenderCommand {
         logical_device: &ash::Device,
         command_pool: vk::CommandPool,
     ) {
+        for uniform_buffer in self.dependent_fields.uniform_buffers.iter() {
+            logical_device.destroy_buffer(uniform_buffer.buffer, None);
+            logical_device.free_memory(uniform_buffer.memory, None);
+        }
+
         for framebuffer in self.dependent_fields.framebuffers.iter() {
             logical_device.destroy_framebuffer(*framebuffer, None);
         }
 
-        logical_device
-            .destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
+        logical_device.destroy_pipeline(self.dependent_fields.graphics_pipeline.pipeline, None);
         logical_device.destroy_pipeline_layout(
             self.dependent_fields.graphics_pipeline.pipeline_layout,
             None,
@@ -866,4 +814,12 @@ impl Drop for VulkanApp {
             self.instance.destroy_instance(None);
         }
     }
+}
+//////////////////////// Fns ///////////////////////
+fn is_swap_chain_adequate(swap_chain_details: &SwapChainSupportDetails) -> bool {
+    !swap_chain_details.formats.is_empty() && !swap_chain_details.present_modes.is_empty()
+}
+
+fn is_device_supporting_features(physical_device_featrues: &vk::PhysicalDeviceFeatures) -> bool {
+    physical_device_featrues.sampler_anisotropy == vk::TRUE
 }

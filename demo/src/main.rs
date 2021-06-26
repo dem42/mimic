@@ -1,5 +1,9 @@
 use log::info;
-use mimic_common::{apptime::AppTime, config::MimicConfig};
+use mimic_common::{
+    apptime::AppTime,
+    config::MimicConfig,
+    uniforms::{update_uniform_buffer, UniformBufferObject, UniformMetadata},
+};
 use mimic_frontend::{
     main_loop::{Application, MainLoopBuilder},
     render_commands::RenderCommands,
@@ -15,15 +19,25 @@ struct Demo {
 }
 
 impl Application for Demo {
-    fn update(&mut self, render_commands: &mut RenderCommands, apptime: &AppTime, config: &MimicConfig) {
+    fn update(
+        &mut self,
+        render_commands: &mut RenderCommands,
+        apptime: &AppTime,
+        config: &MimicConfig,
+    ) {
         render_commands.request_redraw = true;
 
         if !self.scene_sent && apptime.elapsed_since_game_start.as_secs_f32() > 5.0 {
             render_commands.draw_textured_model(
                 config.resolve_resource("res/textures/texture.jpg").unwrap(),
                 config.resolve_resource("res/models/cube.obj").unwrap(),
-                config.resolve_resource("res/shaders/spv/cube.vert.spv").unwrap(),
-                config.resolve_resource("res/shaders/spv/cube.frag.spv").unwrap(),
+                config
+                    .resolve_resource("res/shaders/spv/cube.vert.spv")
+                    .unwrap(),
+                config
+                    .resolve_resource("res/shaders/spv/cube.frag.spv")
+                    .unwrap(),
+                UniformMetadata::new::<UniformBufferObject>(update_uniform_buffer),
             );
             self.scene_sent = true;
         }

@@ -7,12 +7,13 @@ use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
+use mimic_common::uniforms::{UniformMetadata, UniformUpdateInput};
 use std::convert::TryFrom;
-
+//////////////////////// Traits ///////////////////////
 pub trait MemoryCopyable {
-    unsafe fn copy_to_mapped_memory(&self, data_target_ptr: *mut std::ffi::c_void);
+    unsafe fn copy_to_mapped_memory(&self, data_target_ptr: *mut core::ffi::c_void);
 }
-
+//////////////////////// Fns ///////////////////////
 pub fn copy_buffer(
     src_buffer: vk::Buffer,
     dst_buffer: vk::Buffer,
@@ -86,6 +87,34 @@ where
     // or we have to vk::Flush.. and vk::Invalidate..
     // the writes may be visible to buffer but they are only guaranteed to be visible to GPU on next vk::QueueSubmit
     logical_device.unmap_memory(vertex_buffer_memory);
+
+    Ok(())
+}
+
+pub fn fill_uniform_buffer(
+    frame_data_input: UniformUpdateInput,
+    uniform_metadata: &UniformMetadata,
+    logical_device: &ash::Device,
+    vertex_buffer_memory: vk::DeviceMemory,
+) -> Result<()> {
+    let size = vk::DeviceSize::try_from(uniform_metadata.uniform_buffer_size)?;
+    unsafe {
+        let data_target_ptr = logical_device.map_memory(
+            vertex_buffer_memory,
+            0,
+            size,
+            vk::MemoryMapFlags::empty(),
+        )?;
+
+        (uniform_metadata.uniform_data_getter)(frame_data_input, data_target_ptr);
+
+        // the driver is allowed to not immediately copy the data to the memory buffer
+        // or the writes may not be visible yet
+        // the two ways to address this are either with the COHERENT bit memory requirement
+        // or we have to vk::Flush.. and vk::Invalidate..
+        // the writes may be visible to buffer but they are only guaranteed to be visible to GPU on next vk::QueueSubmit
+        logical_device.unmap_memory(vertex_buffer_memory);
+    }
 
     Ok(())
 }

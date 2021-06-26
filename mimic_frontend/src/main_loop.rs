@@ -1,4 +1,8 @@
-use crate::{render_commands::{RenderCommand, RenderCommands}, result::Result, winit_window};
+use crate::{
+    render_commands::{RenderCommand, RenderCommands},
+    result::Result,
+    winit_window,
+};
 use log::{error, info};
 use mimic_common::{apptime::AppTime, config::MimicConfig};
 use mimic_vulkan_backend::backend::mimic_backend::VulkanApp;
@@ -6,11 +10,16 @@ use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
-
+//////////////////////// Traits ///////////////////////
 pub trait Application {
-    fn update(&mut self, render_commands: &mut RenderCommands, apptime: &AppTime, config: &MimicConfig);
+    fn update(
+        &mut self,
+        render_commands: &mut RenderCommands,
+        apptime: &AppTime,
+        config: &MimicConfig,
+    );
 }
-
+//////////////////////// Structs ///////////////////////
 /// This struct represent the 3D renderer main loop.
 /// It sets up a window and runs the renderer within that window.
 pub struct MainLoopBuilder {
@@ -18,11 +27,11 @@ pub struct MainLoopBuilder {
     window: Option<winit::window::Window>,
     vulkan_app: Option<VulkanApp>,
 }
-
+//////////////////////// Impls ///////////////////////
 impl MainLoopBuilder {
     const ENGINE_NAME: &'static str = "Vulkan Engine";
 
-    pub fn new() -> Self {        
+    pub fn new() -> Self {
         Self {
             event_loop: None,
             window: None,
@@ -78,8 +87,8 @@ impl MainLoopBuilder {
     }
 
     /// Run the provided `vulkan_app` inside of the window.
-    /// By restricting the generic type A to be 'static we prevent A to be a reference unless
-    /// it is a reference with a 'static lifetime. This means application is moved into run and later moved into the event loop.
+    /// By restricting the generic type A to be 'static we prevent A from being a reference unless
+    /// it is a reference with a 'static lifetime. This means the application is moved into run and later moved into the event loop.
     pub fn run<A: Application + 'static>(&mut self, mut application: A) -> ! {
         let event_loop = self.event_loop.take().unwrap();
         let winit_window = self.window.take().unwrap();
@@ -127,13 +136,27 @@ impl MainLoopBuilder {
                         error!("Failed to update app time: {}", error);
                         Self::exit(control_flow);
                     } else {
-                        application.update(&mut render_commands, &apptime, &vulkan_app.resource_resolver);
+                        application.update(
+                            &mut render_commands,
+                            &apptime,
+                            &vulkan_app.resource_resolver,
+                        );
 
                         for render_command in render_commands.command_queue.drain(..) {
                             match render_command {
-                                RenderCommand::DrawObject{ texture_file, model_file, vertex_shader_file, fragment_shader_file} => {
+                                RenderCommand::DrawObject {
+                                    texture_file,
+                                    model_file,
+                                    vertex_shader_file,
+                                    fragment_shader_file,
+                                    uniform_metadata,
+                                } => {
                                     let result = vulkan_app.create_render_command(
-                                        texture_file, model_file, vertex_shader_file, fragment_shader_file
+                                        texture_file,
+                                        model_file,
+                                        vertex_shader_file,
+                                        fragment_shader_file,
+                                        uniform_metadata,
                                     );
                                     if let Err(error) = result {
                                         error!("Failed draw object operation: {}", error);
