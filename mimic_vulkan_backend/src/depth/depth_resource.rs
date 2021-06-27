@@ -6,13 +6,13 @@ use crate::{
     util::result::Result,
 };
 use ash::{version::DeviceV1_0, vk};
-
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct DepthResource {
     pub depth_image: Image,
     pub depth_image_view: vk::ImageView,
 }
-
+//////////////////////// Impls ///////////////////////
 impl DepthResource {
     pub fn new(
         msaa_samples: vk::SampleCountFlags,

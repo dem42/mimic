@@ -3,13 +3,13 @@ use std::{
     io::Result,
     path::{Path, PathBuf},
 };
-
+//////////////////////// Structs ///////////////////////
 /// This struct represents a bundle of mimic resource files like textures, models, shaders etc.
 /// Bundles need to be moved to a location where the executable can access them using a relative path.
 pub struct ResourceBundle {
     pub resource_dir_path: PathBuf,
 }
-
+//////////////////////// Impls ///////////////////////
 impl ResourceBundle {
     pub fn new(resource_dir_path: PathBuf) -> Self {
         println!("cargo:rerun-if-changed={}", resource_dir_path.display());

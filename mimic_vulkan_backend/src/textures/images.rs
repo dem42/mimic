@@ -15,7 +15,13 @@ use ash::{
 };
 use image::GenericImageView;
 use std::{cmp::max, convert::TryFrom, f32, path::PathBuf};
-
+//////////////////////// Enums ///////////////////////
+#[derive(Debug)]
+pub enum MipmapParam {
+    NoMipmap,
+    UseRuntimeMipmap,
+}
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct Image {
     pub image: vk::Image,
@@ -25,19 +31,14 @@ pub struct Image {
     pub mip_levels: u32,
 }
 
-impl MemoryCopyable for [u8] {
-    unsafe fn copy_to_mapped_memory(&self, data_target_ptr: *mut std::ffi::c_void) {
-        let data_ptr = data_target_ptr as *mut u8;
-        data_ptr.copy_from_nonoverlapping(self.as_ptr(), self.len());
-    }
+#[derive(Default)]
+pub struct TextureImage {
+    pub name: PathBuf,
+    pub image: Image,
+    pub view: vk::ImageView,
+    pub sampler: vk::Sampler,
 }
-
-#[derive(Debug)]
-pub enum MipmapParam {
-    NoMipmap,
-    UseRuntimeMipmap,
-}
-
+//////////////////////// Impls ///////////////////////
 impl Image {
     pub fn new(
         width: u32,
@@ -281,12 +282,11 @@ impl Image {
     }
 }
 
-#[derive(Default)]
-pub struct TextureImage {
-    pub name: PathBuf,
-    pub image: Image,
-    pub view: vk::ImageView,
-    pub sampler: vk::Sampler,
+impl MemoryCopyable for [u8] {
+    unsafe fn copy_to_mapped_memory(&self, data_target_ptr: *mut std::ffi::c_void) {
+        let data_ptr = data_target_ptr as *mut u8;
+        data_ptr.copy_from_nonoverlapping(self.as_ptr(), self.len());
+    }
 }
 
 impl TextureImage {

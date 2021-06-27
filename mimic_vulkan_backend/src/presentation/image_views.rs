@@ -3,11 +3,11 @@ use crate::util::result::Result;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-
+//////////////////////// Structs ///////////////////////
 pub struct ImageViews {
     pub image_views: Vec<vk::ImageView>,
 }
-
+//////////////////////// Impls ///////////////////////
 impl ImageViews {
     pub fn new(
         logical_device: &ash::Device,

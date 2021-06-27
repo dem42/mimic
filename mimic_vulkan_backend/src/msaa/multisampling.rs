@@ -4,13 +4,13 @@ use crate::{
     util::result::Result,
 };
 use ash::{version::DeviceV1_0, vk};
-
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct ColorResource {
     pub image: Image,
     pub view: vk::ImageView,
 }
-
+//////////////////////// Impls ///////////////////////
 impl ColorResource {
     pub fn new(
         msaa_samples: vk::SampleCountFlags,

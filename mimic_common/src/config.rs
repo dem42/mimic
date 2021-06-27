@@ -4,11 +4,11 @@ use std::{
     env,
     path::{Path, PathBuf},
 };
-
+//////////////////////// Structs ///////////////////////
 pub struct MimicConfig {
     resource_base_folder: PathBuf,
 }
-
+//////////////////////// Impls ///////////////////////
 impl MimicConfig {
     pub fn new() -> Result<Self> {
         let current_exe = env::current_exe()?;

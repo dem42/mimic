@@ -9,13 +9,13 @@ use crate::{
 };
 use ash::{version::DeviceV1_0, vk};
 use std::{convert::TryFrom, ffi::CString, path::Path, ptr};
-
+//////////////////////// Structs ///////////////////////
 pub struct GraphicsPipeline {
     pub render_pass: vk::RenderPass,
     pub pipeline_layout: vk::PipelineLayout,
     pub pipeline: vk::Pipeline,
 }
-
+//////////////////////// Impls ///////////////////////
 impl GraphicsPipeline {
     // order of clear values has to match order of attachments in our render pass
     pub const CLEAR_COLORS: [vk::ClearValue; 2] = [

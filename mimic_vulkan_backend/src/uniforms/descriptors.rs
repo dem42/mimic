@@ -8,46 +8,13 @@ use ash::vk;
 use mimic_common::uniforms::UniformMetadata;
 use std::convert::TryFrom;
 use std::ptr;
-
-pub fn create_descriptor_set_layout(
-    logical_device: &ash::Device,
-) -> Result<vk::DescriptorSetLayout> {
-    let ubo_layout_binding = vk::DescriptorSetLayoutBinding {
-        binding: 0,
-        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-        descriptor_count: 1,
-        stage_flags: vk::ShaderStageFlags::VERTEX,
-        ..Default::default()
-    };
-
-    let sampler_layout_binding = vk::DescriptorSetLayoutBinding {
-        binding: 1,
-        descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        descriptor_count: 1,
-        stage_flags: vk::ShaderStageFlags::FRAGMENT,
-        ..Default::default()
-    };
-
-    let bindings = [ubo_layout_binding, sampler_layout_binding];
-
-    let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo {
-        binding_count: u32::try_from(bindings.len())?,
-        p_bindings: bindings.as_ptr(),
-        ..Default::default()
-    };
-
-    let descriptor_layout =
-        unsafe { logical_device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
-
-    Ok(descriptor_layout)
-}
-
+//////////////////////// Structs ///////////////////////
 #[derive(Debug)]
 pub struct DescriptorData {
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
 }
-
+//////////////////////// Impls ///////////////////////
 impl DescriptorData {
     pub fn new(
         uniform_metadata: &UniformMetadata,
@@ -184,4 +151,37 @@ impl DescriptorData {
 
         Ok(descriptor_sets)
     }
+}
+//////////////////////// Fns ///////////////////////
+pub fn create_descriptor_set_layout(
+    logical_device: &ash::Device,
+) -> Result<vk::DescriptorSetLayout> {
+    let ubo_layout_binding = vk::DescriptorSetLayoutBinding {
+        binding: 0,
+        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+        descriptor_count: 1,
+        stage_flags: vk::ShaderStageFlags::VERTEX,
+        ..Default::default()
+    };
+
+    let sampler_layout_binding = vk::DescriptorSetLayoutBinding {
+        binding: 1,
+        descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+        descriptor_count: 1,
+        stage_flags: vk::ShaderStageFlags::FRAGMENT,
+        ..Default::default()
+    };
+
+    let bindings = [ubo_layout_binding, sampler_layout_binding];
+
+    let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo {
+        binding_count: u32::try_from(bindings.len())?,
+        p_bindings: bindings.as_ptr(),
+        ..Default::default()
+    };
+
+    let descriptor_layout =
+        unsafe { logical_device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
+
+    Ok(descriptor_layout)
 }

@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 use std::os::raw::c_ulong;
-
+//////////////////////// Enums ///////////////////////
 pub enum WindowSurface {
     WindowsSurface {
         hinstance: *const c_void,
@@ -15,7 +15,7 @@ pub enum WindowSurface {
         xlib_display: *const c_void,
     },
 }
-
+//////////////////////// Structs ///////////////////////
 pub struct WindowSize {
     pub monitor_resolution_width: u32,
     pub monitor_resolution_height: u32,

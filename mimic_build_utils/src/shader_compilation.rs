@@ -4,12 +4,19 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-
+//////////////////////// Structs ///////////////////////
 /// Represents a GLSL shader source file in the filesystem.
 pub struct ShaderSource {
     shader_path: PathBuf,
 }
-
+/// This struct represents a directory of shaders. It contains both the input directory where GLSL source files are stored
+/// as well as the output directory where the compiled SPIR-V shaders are saved.
+pub struct ShaderCompileParams {
+    input_dir: PathBuf,
+    output_dir: PathBuf,
+    out_arg_flag: OsString,
+}
+//////////////////////// Impls ///////////////////////
 impl ShaderSource {
     /// Create a new shader source file from the provided path.
     pub fn new(shader_path: PathBuf) -> Self {
@@ -71,14 +78,6 @@ impl ShaderSource {
             }
         }
     }
-}
-
-/// This struct represents a directory of shaders. It contains both the input directory where GLSL source files are stored
-/// as well as the output directory where the compiled SPIR-V shaders are saved.
-pub struct ShaderCompileParams {
-    input_dir: PathBuf,
-    output_dir: PathBuf,
-    out_arg_flag: OsString,
 }
 
 impl ShaderCompileParams {

@@ -6,12 +6,18 @@ use bitflags::bitflags;
 use log::info;
 use std::{collections::HashMap, convert::TryFrom, path::Path};
 use tobj::load_obj;
-
+//////////////////////// Bitflags ///////////////////////
+bitflags! {
+    pub struct MeshLoadingFlags: u8 {
+        const INVERTED_UP = 0b00000001;
+    }
+}
+//////////////////////// Structs ///////////////////////
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<IndexType>,
 }
-
+//////////////////////// Impls ///////////////////////
 impl Mesh {
     pub fn new(filepath: &Path, loading_props: MeshLoadingFlags) -> Result<Self> {
         let (models, _materials) = load_obj(&filepath, true)?;
@@ -68,11 +74,5 @@ impl Mesh {
         }
         info!("Model \"{:?}\" loaded. Vertices: {}", filepath, idx_cnt);
         Ok(Self { vertices, indices })
-    }
-}
-
-bitflags! {
-    pub struct MeshLoadingFlags: u8 {
-        const INVERTED_UP = 0b00000001;
     }
 }

@@ -4,13 +4,13 @@ use crate::{
 };
 use ash::{version::DeviceV1_0, vk};
 use std::convert::TryFrom;
-
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct VertexBuffer {
     pub data: Buffer,
     pub vertex_count: usize,
 }
-
+//////////////////////// Impls ///////////////////////
 impl VertexBuffer {
     pub fn new(
         data: &[Vertex],

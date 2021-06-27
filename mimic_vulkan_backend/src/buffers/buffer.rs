@@ -5,13 +5,13 @@ use crate::util::result::Result;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct Buffer {
     pub buffer: vk::Buffer,
     pub memory: vk::DeviceMemory,
 }
-
+//////////////////////// Impls ///////////////////////
 impl Buffer {
     pub fn new(
         instance: &ash::Instance,

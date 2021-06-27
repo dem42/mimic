@@ -8,16 +8,16 @@ use mimic_frontend::{
     main_loop::{Application, MainLoopBuilder},
     render_commands::RenderCommands,
 };
-
+//////////////////////// Consts ///////////////////////
 const WINDOW_TITLE: &'static str = "Vulkan Demo";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
-
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 struct Demo {
     scene_sent: bool,
 }
-
+//////////////////////// Impls ///////////////////////
 impl Application for Demo {
     fn update(
         &mut self,
@@ -43,7 +43,7 @@ impl Application for Demo {
         }
     }
 }
-
+//////////////////////// Fns ///////////////////////
 fn main() {
     env_logger::init();
     info!("Hello demo");

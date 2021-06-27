@@ -1,4 +1,5 @@
 use std::{ffi::OsStr, path::PathBuf};
+//////////////////////// Fns ///////////////////////
 fn is_build_dir(dir_name: Option<&OsStr>) -> bool {
     match dir_name {
         Some(dir_name) => dir_name == "build",

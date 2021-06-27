@@ -7,18 +7,18 @@ use ash::version::EntryV1_0;
 use std::convert::TryFrom;
 use std::os::raw::c_char;
 use std::ptr;
-
+//////////////////////// Enums ///////////////////////
 pub enum ValidationOptions {
     None,
     Verbose,
 }
-
+//////////////////////// Structs ///////////////////////
 pub struct VulkanValidation {
     pub is_enabled: bool,
     validation_layer_names: [&'static str; 1],
     options: ValidationOptions,
 }
-
+//////////////////////// Impls ///////////////////////
 impl VulkanValidation {
     pub const fn enabled(options: ValidationOptions) -> Self {
         VulkanValidation {

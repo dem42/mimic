@@ -2,12 +2,19 @@ use crate::{buffers::memory::MemoryCopyable, util::result::Result};
 use ash::vk;
 use memoffset::offset_of;
 use std::convert::TryFrom;
-
+//////////////////////// Structs ///////////////////////
 #[repr(C)]
 pub struct Vertex {
     pub pos: glm::Vec3,
     pub color: glm::Vec3,
     pub tex_coord: glm::Vec2,
+}
+//////////////////////// Impls ///////////////////////
+impl MemoryCopyable for [Vertex] {
+    unsafe fn copy_to_mapped_memory(&self, data_target_ptr: *mut std::ffi::c_void) {
+        let data_ptr = data_target_ptr as *mut Vertex;
+        data_ptr.copy_from_nonoverlapping(self.as_ptr(), self.len());
+    }
 }
 
 impl Vertex {
@@ -45,12 +52,5 @@ impl Vertex {
                 offset: u32::try_from(offset_of!(Vertex, tex_coord))?,
             },
         ])
-    }
-}
-
-impl MemoryCopyable for [Vertex] {
-    unsafe fn copy_to_mapped_memory(&self, data_target_ptr: *mut std::ffi::c_void) {
-        let data_ptr = data_target_ptr as *mut Vertex;
-        data_ptr.copy_from_nonoverlapping(self.as_ptr(), self.len());
     }
 }

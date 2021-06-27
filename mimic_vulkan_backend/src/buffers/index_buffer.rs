@@ -4,13 +4,13 @@ use crate::{
 };
 use ash::{version::DeviceV1_0, vk};
 use std::convert::TryFrom;
-
+//////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct IndexBuffer {
     pub data: Buffer,
     pub index_count: usize,
 }
-
+//////////////////////// Impls ///////////////////////
 impl IndexBuffer {
     pub fn new(
         indices: &[IndexType],

@@ -3,7 +3,7 @@ use crate::{depth::helpers, presentation::swap_chain::SwapChainContainer, util::
 use ash::version::DeviceV1_0;
 use ash::vk;
 use std::convert::TryFrom;
-
+//////////////////////// Fns ///////////////////////
 pub fn create_render_pass(
     instance: &ash::Instance,
     logical_device: &ash::Device,

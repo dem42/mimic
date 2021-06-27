@@ -7,11 +7,73 @@ use ash::extensions::khr;
 use ash::vk;
 use std::cmp;
 use std::convert::TryFrom;
+//////////////////////// Structs ///////////////////////
+pub struct SwapChainContainer {
+    pub swap_chain_loader: khr::Swapchain,
+    pub swap_chain: vk::SwapchainKHR,
+    pub swap_chain_images: Vec<vk::Image>,
+    pub swap_chain_format: vk::SurfaceFormatKHR,
+    pub swap_chain_extent: vk::Extent2D,
+}
 
 pub struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
     pub formats: Vec<vk::SurfaceFormatKHR>,
     pub present_modes: Vec<vk::PresentModeKHR>,
+}
+//////////////////////// Impls ///////////////////////
+impl SwapChainContainer {
+    pub fn new(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        logical_device: &ash::Device,
+        surface: &SurfaceContainer,
+        window_size: &WindowSize,
+        queue_indices: &QueueFamilyIndices,
+    ) -> Result<Self> {
+        let swap_chain_support_details =
+            SwapChainSupportDetails::query_support(physical_device, surface)?;
+
+        let surface_format = swap_chain_support_details.choose_swap_surface_format()?;
+        let present_mode = swap_chain_support_details.choose_swap_surface_present();
+        let extent = swap_chain_support_details.choose_swap_extent(window_size);
+        let min_image_count = swap_chain_support_details.choose_swap_min_image_count();
+
+        let (sharing_mode, sharing_queue_count, sharing_indices) =
+            queue_indices.get_image_sharing_details();
+
+        let swap_chain_create_info = vk::SwapchainCreateInfoKHR {
+            surface: surface.surface,
+            image_format: surface_format.format,
+            image_color_space: surface_format.color_space,
+            image_extent: extent,
+            min_image_count,
+            present_mode,
+            clipped: vk::TRUE,
+            image_array_layers: 1,
+            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            image_sharing_mode: sharing_mode,
+            queue_family_index_count: u32::try_from(sharing_queue_count)?,
+            p_queue_family_indices: sharing_indices.as_ptr(),
+            pre_transform: swap_chain_support_details.capabilities.current_transform,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+            ..vk::SwapchainCreateInfoKHR::default()
+        };
+
+        let swap_chain_loader = khr::Swapchain::new(instance, logical_device);
+        let swap_chain =
+            unsafe { swap_chain_loader.create_swapchain(&swap_chain_create_info, None)? };
+
+        let swap_chain_images = unsafe { swap_chain_loader.get_swapchain_images(swap_chain)? };
+
+        Ok(SwapChainContainer {
+            swap_chain,
+            swap_chain_loader,
+            swap_chain_images,
+            swap_chain_format: surface_format,
+            swap_chain_extent: extent,
+        })
+    }
 }
 
 impl SwapChainSupportDetails {
@@ -113,67 +175,5 @@ impl SwapChainSupportDetails {
         } else {
             image_count
         }
-    }
-}
-
-pub struct SwapChainContainer {
-    pub swap_chain_loader: khr::Swapchain,
-    pub swap_chain: vk::SwapchainKHR,
-    pub swap_chain_images: Vec<vk::Image>,
-    pub swap_chain_format: vk::SurfaceFormatKHR,
-    pub swap_chain_extent: vk::Extent2D,
-}
-
-impl SwapChainContainer {
-    pub fn new(
-        instance: &ash::Instance,
-        physical_device: vk::PhysicalDevice,
-        logical_device: &ash::Device,
-        surface: &SurfaceContainer,
-        window_size: &WindowSize,
-        queue_indices: &QueueFamilyIndices,
-    ) -> Result<Self> {
-        let swap_chain_support_details =
-            SwapChainSupportDetails::query_support(physical_device, surface)?;
-
-        let surface_format = swap_chain_support_details.choose_swap_surface_format()?;
-        let present_mode = swap_chain_support_details.choose_swap_surface_present();
-        let extent = swap_chain_support_details.choose_swap_extent(window_size);
-        let min_image_count = swap_chain_support_details.choose_swap_min_image_count();
-
-        let (sharing_mode, sharing_queue_count, sharing_indices) =
-            queue_indices.get_image_sharing_details();
-
-        let swap_chain_create_info = vk::SwapchainCreateInfoKHR {
-            surface: surface.surface,
-            image_format: surface_format.format,
-            image_color_space: surface_format.color_space,
-            image_extent: extent,
-            min_image_count,
-            present_mode,
-            clipped: vk::TRUE,
-            image_array_layers: 1,
-            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
-            image_sharing_mode: sharing_mode,
-            queue_family_index_count: u32::try_from(sharing_queue_count)?,
-            p_queue_family_indices: sharing_indices.as_ptr(),
-            pre_transform: swap_chain_support_details.capabilities.current_transform,
-            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
-            ..vk::SwapchainCreateInfoKHR::default()
-        };
-
-        let swap_chain_loader = khr::Swapchain::new(instance, logical_device);
-        let swap_chain =
-            unsafe { swap_chain_loader.create_swapchain(&swap_chain_create_info, None)? };
-
-        let swap_chain_images = unsafe { swap_chain_loader.get_swapchain_images(swap_chain)? };
-
-        Ok(SwapChainContainer {
-            swap_chain,
-            swap_chain_loader,
-            swap_chain_images,
-            swap_chain_format: surface_format,
-            swap_chain_extent: extent,
-        })
     }
 }

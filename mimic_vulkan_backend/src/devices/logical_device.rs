@@ -6,7 +6,7 @@ use crate::util::validation::VulkanValidation;
 use ash::version::InstanceV1_0;
 use ash::vk;
 use std::convert::TryFrom;
-
+//////////////////////// Fns ///////////////////////
 pub fn create_logical_device(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,

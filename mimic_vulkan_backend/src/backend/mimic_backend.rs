@@ -56,35 +56,6 @@ enum ResizeDetectedLocation {
     InPresent,
 }
 //////////////////////// Structs ///////////////////////
-struct RenderCommandSwapChainFields {
-    uniform_buffers: Vec<Buffer>,
-    descriptor_data: DescriptorData,
-    command_buffers: Vec<vk::CommandBuffer>,
-    graphics_pipeline: GraphicsPipeline,
-    framebuffers: Vec<vk::Framebuffer>,
-}
-
-struct RenderCommand {
-    vertex_shader_file: PathBuf,
-    fragment_shader_file: PathBuf,
-    uniform_metadata: UniformMetadata,
-    _model: Mesh,
-    vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,
-    texture_image: TextureImage,
-    dependent_fields: RenderCommandSwapChainFields,
-}
-
-/// This structure wraps all the objects that depend on the swap-chain in order to be able to recreate them when the swap-chain images change.
-/// Swap-chain is a series of framebuffers that can be drawn to and later presented to the graphics display.
-/// The purpose is to allow double buffering so that the framebuffer isn't being written to while it is presented.
-struct SwapChainDependentFields {
-    swap_chain_container: SwapChainContainer,
-    image_views_container: ImageViews,
-    color_resource: ColorResource,
-    depth_resource: DepthResource,
-}
-
 /// A structure that represents a vulkan application.
 /// It exposes fields and methods that make it possible to communicate with the vulkan graphics API
 pub struct VulkanApp {
@@ -112,6 +83,35 @@ pub struct VulkanApp {
     /// This field is used to determine whether the display window was minimized.
     /// When the window is minimized then nothing needs to be rendered.
     pub window_minimized: bool,
+}
+
+struct RenderCommandSwapChainFields {
+    uniform_buffers: Vec<Buffer>,
+    descriptor_data: DescriptorData,
+    command_buffers: Vec<vk::CommandBuffer>,
+    graphics_pipeline: GraphicsPipeline,
+    framebuffers: Vec<vk::Framebuffer>,
+}
+
+struct RenderCommand {
+    vertex_shader_file: PathBuf,
+    fragment_shader_file: PathBuf,
+    uniform_metadata: UniformMetadata,
+    _model: Mesh,
+    vertex_buffer: VertexBuffer,
+    index_buffer: IndexBuffer,
+    texture_image: TextureImage,
+    dependent_fields: RenderCommandSwapChainFields,
+}
+
+/// This structure wraps all the objects that depend on the swap-chain in order to be able to recreate them when the swap-chain images change.
+/// Swap-chain is a series of framebuffers that can be drawn to and later presented to the graphics display.
+/// The purpose is to allow double buffering so that the framebuffer isn't being written to while it is presented.
+struct SwapChainDependentFields {
+    swap_chain_container: SwapChainContainer,
+    image_views_container: ImageViews,
+    color_resource: ColorResource,
+    depth_resource: DepthResource,
 }
 //////////////////////// Impls ///////////////////////
 impl VulkanApp {

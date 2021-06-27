@@ -9,7 +9,7 @@ use crate::{
 };
 use ash::{version::DeviceV1_0, vk};
 use std::{convert::TryFrom, ptr};
-
+//////////////////////// Fns ///////////////////////
 pub fn create_command_pool(
     logical_device: &ash::Device,
     queue_family_indices: &QueueFamilyIndices,

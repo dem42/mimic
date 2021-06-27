@@ -2,7 +2,7 @@ use mimic_vulkan_backend::{
     util::result::{Result, VulkanError},
     window::{WindowSize, WindowSurface},
 };
-
+//////////////////////// Fns ///////////////////////
 pub fn get_window_size_from_winit(winit_window: &winit::window::Window) -> Result<WindowSize> {
     if let Some(current_monitor) = winit_window.current_monitor() {
         Ok(WindowSize {
