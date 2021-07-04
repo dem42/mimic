@@ -408,9 +408,9 @@ impl TextureImage {
         let sampler_create_info = vk::SamplerCreateInfo {
             mag_filter: vk::Filter::LINEAR,
             min_filter: vk::Filter::LINEAR,
-            address_mode_u: vk::SamplerAddressMode::REPEAT,
-            address_mode_v: vk::SamplerAddressMode::REPEAT,
-            address_mode_w: vk::SamplerAddressMode::REPEAT,
+            address_mode_u: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            address_mode_v: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            address_mode_w: vk::SamplerAddressMode::CLAMP_TO_EDGE,
             anisotropy_enable: vk::TRUE,
             max_anisotropy: physical_device_properties.limits.max_sampler_anisotropy,
             border_color: vk::BorderColor::INT_OPAQUE_BLACK,
