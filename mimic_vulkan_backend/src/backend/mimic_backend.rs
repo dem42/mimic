@@ -32,11 +32,7 @@ use ash::{
     vk,
 };
 use log::info;
-use mimic_common::{
-    apptime::AppTime,
-    config::MimicConfig,
-    uniforms::{update_uniform_buffer, UniformBufferObject, UniformMetadata, UniformUpdateInput},
-};
+use mimic_common::{apptime::AppTime, config::MimicConfig, uniforms::{StaticFnUniformSpec, UniformBufferObject, UniformSpec, UniformUpdateInput, update_uniform_buffer}};
 use std::{
     convert::TryFrom,
     ffi::CString,
@@ -70,7 +66,6 @@ pub struct VulkanApp {
     queue_indices: QueueFamilyIndices,
     queues: QueueMap,
     dependent_fields: SwapChainDependentFields,
-    uniform_descriptors: vk::DescriptorSetLayout,
     command_pool: vk::CommandPool,
     current_render_command: Option<RenderCommand>,
     sync_container: SynchronizationContainer,
@@ -96,11 +91,12 @@ struct RenderCommandSwapChainFields {
 struct RenderCommand {
     vertex_shader_file: PathBuf,
     fragment_shader_file: PathBuf,
-    uniform_metadata: UniformMetadata,
+    uniform_spec: Box<dyn UniformSpec>,
     _model: Mesh,
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     texture_image: TextureImage,
+    uniform_descriptors: vk::DescriptorSetLayout,
     dependent_fields: RenderCommandSwapChainFields,
 }
 
@@ -163,9 +159,6 @@ impl VulkanApp {
 
         let queues = QueueMap::new(&queue_indices, &logical_device)?;
 
-        let uniform_descriptors =
-            uniforms::descriptors::create_descriptor_set_layout(&logical_device)?;
-
         let current_render_command: Option<RenderCommand> = None;
 
         let dependent_fields = Self::create_swapchain_dependent_fields(
@@ -192,7 +185,6 @@ impl VulkanApp {
             queue_indices,
             queues,
             dependent_fields,
-            uniform_descriptors,
             command_pool,
             sync_container,
             msaa_samples,
@@ -208,7 +200,7 @@ impl VulkanApp {
     fn create_render_command_swap_chain_fields(
         vertex_shader_file: &Path,
         fragment_shader_file: &Path,
-        uniform_metadata: &UniformMetadata,
+        uniform_spec: &Box<dyn UniformSpec>,
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -241,7 +233,7 @@ impl VulkanApp {
         )?;
 
         let uniform_buffers = uniforms::buffers::create_uniform_buffers(
-            uniform_metadata.uniform_buffer_size,
+            uniform_spec.uniform_buffer_size(),
             instance,
             physical_device,
             logical_device,
@@ -249,7 +241,7 @@ impl VulkanApp {
         )?;
 
         let descriptor_data = DescriptorData::new(
-            uniform_metadata,
+            &uniform_spec,
             logical_device,
             &swap_chain_dependent_fields.swap_chain_container,
             uniform_descriptors,
@@ -288,7 +280,7 @@ impl VulkanApp {
                 .resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv")?,
             self.resource_resolver
                 .resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv")?,
-            UniformMetadata::new::<UniformBufferObject>(update_uniform_buffer),
+            Box::new(StaticFnUniformSpec::new::<UniformBufferObject>(update_uniform_buffer)),
         )
     }
 
@@ -298,7 +290,7 @@ impl VulkanApp {
         model_file: PathBuf,
         vertex_shader_file: PathBuf,
         fragment_shader_file: PathBuf,
-        uniform_metadata: UniformMetadata,
+        uniform_spec: Box<dyn UniformSpec>,
     ) -> Result<()> {
         // we are removing the previous render command so we must block until we are done using it and then clean it up
         unsafe {
@@ -340,10 +332,13 @@ impl VulkanApp {
             &self.queues,
         )?;
 
+        let uniform_descriptors =
+        uniforms::descriptors::create_descriptor_set_layout(&self.logical_device)?;
+
         let dependent_fields = Self::create_render_command_swap_chain_fields(
             vertex_shader_file.as_path(),
             fragment_shader_file.as_path(),
-            &uniform_metadata,
+            &uniform_spec,
             &self.instance,
             self.physical_device,
             &self.logical_device,
@@ -351,7 +346,7 @@ impl VulkanApp {
             &vertex_buffer,
             &index_buffer,
             &self.command_pool,
-            self.uniform_descriptors,
+            uniform_descriptors,
             &self.dependent_fields,
             self.msaa_samples,
         )?;
@@ -359,11 +354,12 @@ impl VulkanApp {
         self.current_render_command = Some(RenderCommand {
             vertex_shader_file,
             fragment_shader_file,
-            uniform_metadata,
+            uniform_spec,
             _model: model,
             vertex_buffer,
             index_buffer,
             texture_image,
+            uniform_descriptors,
             dependent_fields,
         });
 
@@ -446,7 +442,7 @@ impl VulkanApp {
             render_command.dependent_fields = Self::create_render_command_swap_chain_fields(
                 render_command.vertex_shader_file.as_path(),
                 render_command.fragment_shader_file.as_path(),
-                &render_command.uniform_metadata,
+                &render_command.uniform_spec,
                 &self.instance,
                 self.physical_device,
                 &self.logical_device,
@@ -454,7 +450,7 @@ impl VulkanApp {
                 &render_command.vertex_buffer,
                 &render_command.index_buffer,
                 &self.command_pool,
-                self.uniform_descriptors,
+                render_command.uniform_descriptors,
                 &self.dependent_fields,
                 self.msaa_samples,
             )?;
@@ -666,7 +662,7 @@ impl VulkanApp {
             }
             memory::fill_uniform_buffer(
                 frame_data_input,
-                &render_command.uniform_metadata,
+                &render_command.uniform_spec,
                 &self.logical_device,
                 render_command.dependent_fields.uniform_buffers[swapchain_image_index].memory,
             )?;
@@ -787,6 +783,8 @@ impl RenderCommand {
         std::mem::take(&mut self.texture_image).cleanup(logical_device);
         std::mem::take(&mut self.index_buffer).cleanup(logical_device);
         std::mem::take(&mut self.vertex_buffer).cleanup(logical_device);
+
+        logical_device.destroy_descriptor_set_layout(self.uniform_descriptors, None);
     }
 }
 
@@ -798,9 +796,6 @@ impl Drop for VulkanApp {
                 render_command.cleanup(&self.logical_device, self.command_pool);
             }
             self.cleanup_swap_chain();
-
-            self.logical_device
-                .destroy_descriptor_set_layout(self.uniform_descriptors, None);
 
             self.sync_container.destroy(&self.logical_device);
             self.logical_device

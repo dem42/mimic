@@ -1,4 +1,4 @@
-use mimic_common::uniforms::UniformMetadata;
+use mimic_common::uniforms::UniformSpec;
 use std::path::PathBuf;
 //////////////////////// Enums ///////////////////////
 pub enum RenderCommand {
@@ -7,7 +7,7 @@ pub enum RenderCommand {
         model_file: PathBuf,
         vertex_shader_file: PathBuf,
         fragment_shader_file: PathBuf,
-        uniform_metadata: UniformMetadata,
+        uniform_spec: Box<dyn UniformSpec>,
     },
 }
 //////////////////////// Structs ///////////////////////
@@ -24,14 +24,14 @@ impl RenderCommands {
         model_file: PathBuf,
         vertex_shader_file: PathBuf,
         fragment_shader_file: PathBuf,
-        uniform_metadata: UniformMetadata,
+        uniform_spec: Box<dyn UniformSpec>,
     ) {
         self.command_queue.push(RenderCommand::DrawObject {
             texture_file,
             model_file,
             vertex_shader_file,
             fragment_shader_file,
-            uniform_metadata,
+            uniform_spec,
         });
     }
 }

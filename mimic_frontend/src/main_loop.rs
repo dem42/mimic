@@ -102,74 +102,17 @@ impl MainLoopBuilder {
             // thus there won't be any waiting and we get a call to application.update()
             *control_flow = ControlFlow::Poll;
             match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested => {
-                        Self::exit(control_flow);
-                    }
-                    WindowEvent::KeyboardInput { input, .. } => match input {
-                        KeyboardInput {
-                            virtual_keycode,
-                            state,
-                            ..
-                        } => match (virtual_keycode, state) {
-                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                Self::exit(control_flow);
-                            }
-                            _ => {}
-                        },
-                    },
-                    WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
-                        info!("Window was resized");
-                        vulkan_app.window_resized = true;
-                        if width == 0 || height == 0 {
-                            info!("Window was minimized");
-                            vulkan_app.window_minimized = true;
-                        } else {
-                            vulkan_app.window_minimized = false;
-                        }
-                    }
-                    _ => {}
+                Event::WindowEvent { event, .. } => {
+                    Self::handle_window_event(control_flow, event, &mut vulkan_app);
                 },
                 Event::MainEventsCleared => {
-                    let time_update_result = apptime.update();
-                    if let Err(error) = time_update_result {
-                        error!("Failed to update app time: {}", error);
-                        Self::exit(control_flow);
-                    } else {
-                        application.update(
-                            &mut render_commands,
-                            &apptime,
-                            &vulkan_app.resource_resolver,
-                        );
-
-                        for render_command in render_commands.command_queue.drain(..) {
-                            match render_command {
-                                RenderCommand::DrawObject {
-                                    texture_file,
-                                    model_file,
-                                    vertex_shader_file,
-                                    fragment_shader_file,
-                                    uniform_metadata,
-                                } => {
-                                    let result = vulkan_app.create_render_command(
-                                        texture_file,
-                                        model_file,
-                                        vertex_shader_file,
-                                        fragment_shader_file,
-                                        uniform_metadata,
-                                    );
-                                    if let Err(error) = result {
-                                        error!("Failed draw object operation: {}", error);
-                                        Self::exit(control_flow);
-                                    }
-                                }
-                            }
-                        }
-
-                        if render_commands.request_redraw {
-                            winit_window.request_redraw();
-                        }
-                    }
+                    Self::handle_events_cleared(
+                        control_flow,
+                        &mut apptime,
+                        &mut application,
+                        &mut render_commands,
+                        &mut vulkan_app,
+                        &winit_window);
                 }
                 Event::RedrawRequested(_window_id) => {
                     if let Ok(window_size) = winit_window::get_window_size_from_winit(&winit_window)
@@ -192,6 +135,82 @@ impl MainLoopBuilder {
                 _ => {}
             }
         })
+    }
+
+    fn handle_events_cleared<A: Application + 'static>(
+        control_flow: &mut ControlFlow,
+        apptime: &mut AppTime,
+        application: &mut A,
+        render_commands: &mut RenderCommands,
+        vulkan_app: &mut VulkanApp,
+        winit_window: &winit::window::Window,
+    ) {
+        let time_update_result = apptime.update();
+        if let Err(error) = time_update_result {
+            error!("Failed to update app time: {}", error);
+            Self::exit(control_flow);
+        } else {
+            application.update(render_commands, &apptime, &vulkan_app.resource_resolver);
+
+            for render_command in render_commands.command_queue.drain(..) {
+                match render_command {
+                    RenderCommand::DrawObject {
+                        texture_file,
+                        model_file,
+                        vertex_shader_file,
+                        fragment_shader_file,
+                        uniform_spec,
+                    } => {
+                        let result = vulkan_app.create_render_command(
+                            texture_file,
+                            model_file,
+                            vertex_shader_file,
+                            fragment_shader_file,
+                            uniform_spec,
+                        );
+                        if let Err(error) = result {
+                            error!("Failed draw object operation: {}", error);
+                            Self::exit(control_flow);
+                        }
+                    }
+                }
+            }
+
+            if render_commands.request_redraw {
+                winit_window.request_redraw();
+            }
+        }
+    }
+
+    fn handle_window_event(control_flow: &mut ControlFlow, event: WindowEvent, vulkan_app: &mut VulkanApp) {
+        match event {
+            WindowEvent::CloseRequested => {
+                Self::exit(control_flow);
+            }
+            WindowEvent::KeyboardInput { input, .. } => match input {
+                KeyboardInput {
+                    virtual_keycode,
+                    state,
+                    ..
+                } => match (virtual_keycode, state) {
+                    (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                        Self::exit(control_flow);
+                    }
+                    _ => {}
+                },
+            },
+            WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
+                info!("Window was resized");
+                vulkan_app.window_resized = true;
+                if width == 0 || height == 0 {
+                    info!("Window was minimized");
+                    vulkan_app.window_minimized = true;
+                } else {
+                    vulkan_app.window_minimized = false;
+                }
+            }
+            _ => {}
+        }
     }
 
     fn exit(control_flow: &mut ControlFlow) {

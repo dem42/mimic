@@ -7,7 +7,7 @@ use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
-use mimic_common::uniforms::{UniformMetadata, UniformUpdateInput};
+use mimic_common::uniforms::{UniformSpec, UniformUpdateInput};
 use std::convert::TryFrom;
 //////////////////////// Traits ///////////////////////
 pub trait MemoryCopyable {
@@ -93,11 +93,11 @@ where
 
 pub fn fill_uniform_buffer(
     frame_data_input: UniformUpdateInput,
-    uniform_metadata: &UniformMetadata,
+    uniform_spec: &Box<dyn UniformSpec>,
     logical_device: &ash::Device,
     vertex_buffer_memory: vk::DeviceMemory,
 ) -> Result<()> {
-    let size = vk::DeviceSize::try_from(uniform_metadata.uniform_buffer_size)?;
+    let size = vk::DeviceSize::try_from(uniform_spec.uniform_buffer_size())?;
     unsafe {
         let data_target_ptr = logical_device.map_memory(
             vertex_buffer_memory,
@@ -106,7 +106,7 @@ pub fn fill_uniform_buffer(
             vk::MemoryMapFlags::empty(),
         )?;
 
-        (uniform_metadata.uniform_data_getter)(frame_data_input, data_target_ptr);
+        uniform_spec.get_uniform_data(frame_data_input, data_target_ptr);
 
         // the driver is allowed to not immediately copy the data to the memory buffer
         // or the writes may not be visible yet

@@ -2,12 +2,14 @@ use log::info;
 use mimic_common::{
     apptime::AppTime,
     config::MimicConfig,
-    uniforms::{update_uniform_buffer, UniformBufferObject, UniformMetadata},
+    uniforms::{copy_uniform_to_memory, ForceAlignWrapper, UniformBufferObject, UniformSpec},
 };
 use mimic_frontend::{
+    cameras::camera::Camera,
     main_loop::{Application, MainLoopBuilder},
     render_commands::RenderCommands,
 };
+use nalgebra_glm as glm;
 //////////////////////// Consts ///////////////////////
 const WINDOW_TITLE: &'static str = "Vulkan Demo";
 const WINDOW_WIDTH: u32 = 800;
@@ -16,6 +18,11 @@ const WINDOW_HEIGHT: u32 = 600;
 #[derive(Default)]
 struct Demo {
     scene_sent: bool,
+}
+
+struct DemoUniformSpec {
+    camera: Camera,
+    static_model_transform: glm::Mat4,
 }
 //////////////////////// Impls ///////////////////////
 impl Application for Demo {
@@ -27,20 +34,68 @@ impl Application for Demo {
     ) {
         render_commands.request_redraw = true;
 
-        if !self.scene_sent && apptime.elapsed_since_game_start.as_secs_f32() > 5.0 {
+        if !self.scene_sent && apptime.elapsed_since_game_start.as_secs_f32() > 2.0 {
+
+            let rot: glm::Mat4 = glm::rotation(std::f32::consts::FRAC_PI_2, &glm::Vec3::x_axis());
+
             render_commands.draw_textured_model(
                 config.resolve_resource("res/textures/texture.jpg").unwrap(),
-                config.resolve_resource("res/models/cube.obj").unwrap(),
+                config.resolve_resource("res/models/quad.obj").unwrap(),
                 config
                     .resolve_resource("res/shaders/spv/cube.vert.spv")
                     .unwrap(),
                 config
-                    .resolve_resource("res/shaders/spv/cube.frag.spv")
+                    .resolve_resource("res/shaders/spv/quad_textured.frag.spv")
                     .unwrap(),
-                UniformMetadata::new::<UniformBufferObject>(update_uniform_buffer),
+                Box::new(DemoUniformSpec::new(
+                    Camera::new(
+                        glm::vec3(0., 0., 3.),
+                        glm::vec3(0., 0., -1.),
+                        glm::vec3(0., 1., 0.),
+                    ),
+                    rot,
+                )),
             );
             self.scene_sent = true;
         }
+    }
+}
+
+impl DemoUniformSpec {
+    fn new(camera: Camera, static_model_transform: glm::Mat4) -> Self {
+        Self {
+            camera,
+            static_model_transform,
+        }
+    }
+}
+
+impl UniformSpec for DemoUniformSpec {
+    fn get_uniform_data(
+        &self,
+        input: mimic_common::uniforms::UniformUpdateInput<'_>,
+        memory_target_ptr: *mut core::ffi::c_void,
+    ) {
+        let width = input.swapchain_image_width as f32;
+        let height = input.swapchain_image_height as f32;
+        let proj = self.camera.get_projection_matrix(width, height);
+        let view = self.camera.get_view_matrix();
+        let model = self.static_model_transform * glm::Mat4::identity();
+
+        let ubo = UniformBufferObject {
+            force_align_wrapper: ForceAlignWrapper {
+                foo: glm::Vec2::new(0., 0.),
+            },
+            model,
+            view,
+            proj,
+        };
+
+        copy_uniform_to_memory(&ubo, memory_target_ptr);
+    }
+
+    fn uniform_buffer_size(&self) -> usize {
+        std::mem::size_of::<UniformBufferObject>()
     }
 }
 //////////////////////// Fns ///////////////////////

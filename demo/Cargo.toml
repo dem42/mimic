@@ -13,6 +13,7 @@ mimic_vulkan_backend = { path = "../mimic_vulkan_backend" }
 mimic_common = { path = "../mimic_common" }
 log = "0.4"
 env_logger = "0.8.3"
+nalgebra-glm = "0.9.0"
 
 [build-dependencies]
 mimic_build_utils = { path = "../mimic_build_utils" }

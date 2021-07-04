@@ -5,7 +5,7 @@ use crate::util::result::{Result, VulkanError};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use mimic_common::uniforms::UniformMetadata;
+use mimic_common::uniforms::UniformSpec;
 use std::convert::TryFrom;
 use std::ptr;
 //////////////////////// Structs ///////////////////////
@@ -17,7 +17,7 @@ pub struct DescriptorData {
 //////////////////////// Impls ///////////////////////
 impl DescriptorData {
     pub fn new(
-        uniform_metadata: &UniformMetadata,
+        uniform_spec: &Box<dyn UniformSpec>,
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
         descriptor_layout: vk::DescriptorSetLayout,
@@ -26,7 +26,7 @@ impl DescriptorData {
     ) -> Result<Self> {
         let descriptor_pool = Self::create_descriptor_pool(logical_device, swap_chain_container)?;
         let descriptor_sets = Self::create_descriptor_sets(
-            uniform_metadata,
+            uniform_spec,
             logical_device,
             swap_chain_container,
             descriptor_pool,
@@ -74,7 +74,7 @@ impl DescriptorData {
     }
 
     fn create_descriptor_sets(
-        uniform_metadata: &UniformMetadata,
+        uniform_spec: &Box<dyn UniformSpec>,
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
         descriptor_pool: vk::DescriptorPool,
@@ -103,7 +103,7 @@ impl DescriptorData {
         for buf_idx in 0..swap_chain_container.swap_chain_images.len() {
             let descriptor_buffer_info = vk::DescriptorBufferInfo {
                 offset: 0,
-                range: u64::try_from(uniform_metadata.uniform_buffer_size)?,
+                range: u64::try_from(uniform_spec.uniform_buffer_size())?,
                 buffer: uniform_buffers[buf_idx].buffer,
                 ..Default::default()
             };

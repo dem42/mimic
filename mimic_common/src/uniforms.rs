@@ -1,11 +1,14 @@
-use log::info;
 use nalgebra_glm::{self as glm, Mat4, Vec2, Vec3};
 
 use crate::apptime::AppTime;
-
+//////////////////////// Traits ///////////////////////
+pub trait UniformSpec {
+    fn get_uniform_data(&self, input: UniformUpdateInput<'_>, memory_target_ptr: *mut core::ffi::c_void);
+    fn uniform_buffer_size(&self) -> usize;
+}
 //////////////////////// Structs ///////////////////////
 /// This struct contains information related to a uniform that we want to use in our shaders
-pub struct UniformMetadata {
+pub struct StaticFnUniformSpec {
     pub uniform_buffer_size: usize,
     pub uniform_data_getter: fn(input: UniformUpdateInput<'_>, *mut core::ffi::c_void),
 }
@@ -33,7 +36,7 @@ pub struct UniformUpdateInput<'a> {
 }
 
 //////////////////////// Impls ///////////////////////
-impl UniformMetadata {
+impl StaticFnUniformSpec {
     pub fn new<T>(
         uniform_getter: fn(input: UniformUpdateInput, data_target_ptr: *mut core::ffi::c_void),
     ) -> Self
@@ -46,15 +49,15 @@ impl UniformMetadata {
             uniform_data_getter: uniform_getter,
         }
     }
+}
 
-    pub fn copy_uniform_to_memory<T>(src: &T, memory_data_target_ptr: *mut core::ffi::c_void)
-    where
-        T: Sized,
-    {
-        unsafe {
-            let target_ptr = memory_data_target_ptr as *mut T;
-            target_ptr.copy_from_nonoverlapping(src as *const T, 1);
-        }
+impl UniformSpec for StaticFnUniformSpec {
+    fn get_uniform_data(&self, input: UniformUpdateInput<'_>, memory_target_ptr: *mut core::ffi::c_void) {
+        (self.uniform_data_getter)(input, memory_target_ptr);
+    }
+
+    fn uniform_buffer_size(&self) -> usize {
+        self.uniform_buffer_size
     }
 }
 //////////////////////// Fns ///////////////////////
@@ -71,9 +74,6 @@ pub fn update_uniform_buffer(input: UniformUpdateInput, data_target_ptr: *mut co
         &glm::Vec3::new(0., 0., 0.),
         &up_vector,
     );
-
-    let aspect_ratio = input.swapchain_image_width as f32 / input.swapchain_image_height as f32;
-
     // applying some corrections here because this calculation is for opengl
     // and we have vulkan where in ndc coords the y axis points down
     // also it doesn't use reverse depth
@@ -84,38 +84,6 @@ pub fn update_uniform_buffer(input: UniformUpdateInput, data_target_ptr: *mut co
         0.1,
         10.0,
     );
-
-    if input.apptime.frame % 1000 == 0 {
-        let focal_length = 1.0 / ((45.0 * std::f32::consts::PI / 180.0) / 2.0).tan();
-        let a = 10.0 / (0.1 - 10.0);
-        let b = (0.1 * 10.0) / (0.1 - 10.0);
-        info!(
-            "{}, {}, {}, {}",
-            focal_length / aspect_ratio,
-            -focal_length,
-            a,
-            b
-        );
-        info!(
-            "Proj:\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]\n[{}, {}, {}, {}]",
-            proj.m11,
-            proj.m12,
-            proj.m13,
-            proj.m14,
-            proj.m21,
-            proj.m22,
-            proj.m23,
-            proj.m24,
-            proj.m31,
-            proj.m32,
-            proj.m33,
-            proj.m34,
-            proj.m41,
-            proj.m42,
-            proj.m43,
-            proj.m44,
-        );
-    }
 
     // the vulkan NDC plane is Y-axis pointing down
     // glm::perspective gives us the opengl computation which has Y-axis pointing up
@@ -131,5 +99,15 @@ pub fn update_uniform_buffer(input: UniformUpdateInput, data_target_ptr: *mut co
         proj,
     };
 
-    UniformMetadata::copy_uniform_to_memory(&ubo, data_target_ptr);
+    copy_uniform_to_memory(&ubo, data_target_ptr);
+}
+//////////////////////// Fns ///////////////////////
+pub fn copy_uniform_to_memory<T>(src: &T, memory_data_target_ptr: *mut core::ffi::c_void)
+where
+    T: Sized,
+{
+    unsafe {
+        let target_ptr = memory_data_target_ptr as *mut T;
+        target_ptr.copy_from_nonoverlapping(src as *const T, 1);
+    }
 }
