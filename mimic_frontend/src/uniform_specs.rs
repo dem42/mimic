@@ -1,0 +1,1 @@
+pub mod simple_camera_uniform_spec;

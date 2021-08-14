@@ -2,7 +2,7 @@ use log::info;
 use mimic_common::{
     apptime::AppTime,
     config::MimicConfig,
-    uniforms::{copy_uniform_to_memory, ForceAlignWrapper, UniformBufferObject, UniformSpec},
+    uniforms::{copy_uniform_to_memory, UniformBufferObject, UniformSpec},
 };
 use mimic_frontend::{
     cameras::camera::Camera,
@@ -83,9 +83,6 @@ impl UniformSpec for DemoUniformSpec {
         let model = self.static_model_transform * glm::Mat4::identity();
 
         let ubo = UniformBufferObject {
-            force_align_wrapper: ForceAlignWrapper {
-                foo: glm::Vec2::new(0., 0.),
-            },
             model,
             view,
             proj,

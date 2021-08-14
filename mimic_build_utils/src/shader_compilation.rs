@@ -94,8 +94,13 @@ impl ShaderCompileParams {
         let input_dir = resource_dir
             .join(Self::SHADERS_PATH)
             .join(Self::SRC_INPUT)
-            .to_owned()
-            .canonicalize()?;
+            .to_owned();
+
+        if !input_dir.exists() {
+            println!("cargo:error=There must be a \"shaders/src\" directory under the resource folder");
+        }
+        let input_dir = input_dir.canonicalize()?;
+
         let output_dir = output_resource_folder
             .join(Self::SHADERS_PATH)
             .join(Self::SPV_OUTPUT)

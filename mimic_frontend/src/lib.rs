@@ -6,4 +6,5 @@ pub mod cameras;
 pub mod main_loop;
 pub mod render_commands;
 pub mod result;
+pub mod uniform_specs;
 pub mod winit_window;

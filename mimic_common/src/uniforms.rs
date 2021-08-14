@@ -23,7 +23,6 @@ pub struct ForceAlignWrapper {
 // but since vec2 is only 8 bytes our model mat is not properly aligned unless we force alignment
 #[repr(C, align(16))]
 pub struct UniformBufferObject {
-    pub force_align_wrapper: ForceAlignWrapper,
     pub model: Mat4,
     pub view: Mat4,
     pub proj: Mat4,
@@ -91,9 +90,6 @@ pub fn update_uniform_buffer(input: UniformUpdateInput, data_target_ptr: *mut co
     proj.m22 *= -1.0;
 
     let ubo = UniformBufferObject {
-        force_align_wrapper: ForceAlignWrapper {
-            foo: glm::Vec2::new(0., 0.),
-        },
         model,
         view,
         proj,
