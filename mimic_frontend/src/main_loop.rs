@@ -155,14 +155,14 @@ impl MainLoopBuilder {
             for render_command in render_commands.command_queue.drain(..) {
                 match render_command {
                     RenderCommand::DrawObject {
-                        texture_file,
+                        texture_source,
                         model_file,
                         vertex_shader_file,
                         fragment_shader_file,
                         uniform_spec,
                     } => {
                         let result = vulkan_app.create_render_command(
-                            texture_file,
+                            texture_source,
                             model_file,
                             vertex_shader_file,
                             fragment_shader_file,

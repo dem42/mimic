@@ -1,5 +1,4 @@
 use ash::{vk, InstanceError};
-use image::ImageError;
 use mimic_common::{propagate, result::MimicCommonError};
 use std::{ffi::OsString, num::TryFromIntError, str::Utf8Error};
 use thiserror::Error;
@@ -68,8 +67,6 @@ pub enum VulkanError {
     #[error(transparent)]
     AshInstanceError(InstanceError),
     #[error(transparent)]
-    ImageError(ImageError),
-    #[error(transparent)]
     ObjError(LoadError),
     #[error(transparent)]
     OtherVkResult(vk::Result),
@@ -88,7 +85,6 @@ propagate!(
     AshInstanceError as InstanceError,
     using_panic_feature
 );
-propagate!(VulkanError, ImageError as ImageError, using_panic_feature);
 propagate!(VulkanError, ObjError as LoadError, using_panic_feature);
 propagate!(
     VulkanError,

@@ -13,8 +13,8 @@ use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
-use image::GenericImageView;
-use std::{cmp::max, convert::TryFrom, f32, path::PathBuf};
+use mimic_common::texture::TextureSource;
+use std::{cmp::max, convert::TryFrom, f32};
 //////////////////////// Enums ///////////////////////
 #[derive(Debug)]
 pub enum MipmapParam {
@@ -33,7 +33,7 @@ pub struct Image {
 
 #[derive(Default)]
 pub struct TextureImage {
-    pub name: PathBuf,
+    pub texture_source: Option<Box<dyn TextureSource>>,
     pub image: Image,
     pub view: vk::ImageView,
     pub sampler: vk::Sampler,
@@ -291,7 +291,7 @@ impl MemoryCopyable for [u8] {
 
 impl TextureImage {
     pub fn new(
-        texture_name: PathBuf,
+        texture_source: Box<dyn TextureSource>,
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         logical_device: &ash::Device,
@@ -299,30 +299,22 @@ impl TextureImage {
         queues: &QueueMap,
         physical_device_properties: &vk::PhysicalDeviceProperties,
     ) -> Result<Self> {
-        let image = image::open(texture_name.as_path())?;
-
-        let (width, height) = image.dimensions();
-        let image_size = (width * height * 4) as vk::DeviceSize;
-
-        let rgba_image = image.into_rgba8();
-        let pixels: &Vec<u8> = rgba_image.as_raw();
-
         let staging_buffer = Buffer::new(
             instance,
             physical_device,
             logical_device,
-            image_size,
+            texture_source.get_image_size() as vk::DeviceSize,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
         unsafe {
-            memory::fill_buffer(logical_device, staging_buffer.memory, pixels)?;
+            memory::fill_buffer(logical_device, staging_buffer.memory, texture_source.get_pixels())?;
         }
 
         let mut texture_image = Image::new(
-            width,
-            height,
+            texture_source.get_width(),
+            texture_source.get_height(),
             MipmapParam::UseRuntimeMipmap,
             vk::SampleCountFlags::TYPE_1,
             vk::Format::R8G8B8A8_SRGB,
@@ -385,7 +377,7 @@ impl TextureImage {
         )?;
 
         Ok(Self {
-            name: texture_name,
+            texture_source: Some(texture_source),
             image: texture_image,
             view,
             sampler,

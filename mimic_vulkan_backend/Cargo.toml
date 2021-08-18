@@ -13,7 +13,6 @@ panic_on_error_propagation = []
 [dependencies]
 ash = "0.31.0"
 bitflags = "1.2.1"
-image = "0.23.12"
 memoffset = "0.6.1"
 nalgebra-glm = "0.9.0"
 thiserror = "1.0.23"
@@ -26,7 +25,3 @@ winapi = { version = "0.3.5", features = ["windef", "libloaderapi"] }
 
 [build-dependencies]
 mimic_build_utils = { path = "../mimic_build_utils" }
-
-[[bin]]
-name = "demo"
-path = "src/demo/demo.rs"

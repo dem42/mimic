@@ -1,9 +1,5 @@
 use log::info;
-use mimic_common::{
-    apptime::AppTime,
-    config::MimicConfig,
-    uniforms::{copy_uniform_to_memory, UniformBufferObject, UniformSpec},
-};
+use mimic_common::{apptime::AppTime, config::MimicConfig, texture::FilesystemTextureSource, uniforms::{copy_uniform_to_memory, UniformBufferObject, UniformSpec}};
 use mimic_frontend::{
     cameras::camera::Camera,
     main_loop::{Application, MainLoopBuilder},
@@ -38,8 +34,12 @@ impl Application for Demo {
 
             let rot: glm::Mat4 = glm::rotation(std::f32::consts::FRAC_PI_2, &glm::Vec3::x_axis());
 
+            let texture_source = Box::new(
+                FilesystemTextureSource::new(config.resolve_resource("res/textures/texture.jpg").unwrap()).unwrap()
+            );
+
             render_commands.draw_textured_model(
-                config.resolve_resource("res/textures/texture.jpg").unwrap(),
+                texture_source,
                 config.resolve_resource("res/models/quad.obj").unwrap(),
                 config
                     .resolve_resource("res/shaders/spv/cube.vert.spv")

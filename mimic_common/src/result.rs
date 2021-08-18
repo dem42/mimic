@@ -1,6 +1,7 @@
 use std::{ffi::OsString, io};
 
 use crate::propagate;
+use image::ImageError;
 use thiserror::Error;
 //////////////////////// Types ///////////////////////
 pub type Result<T> = std::result::Result<T, MimicCommonError>;
@@ -10,9 +11,12 @@ pub enum MimicCommonError {
     #[error("Failed to get base directory from executable")]
     ExecutableBaseDirError,
     #[error(transparent)]
+    ImageLoadError(ImageError),
+    #[error(transparent)]
     IOError(io::Error),
     #[error("Resource {0:?} failed to resolve")]
     ResourceFailedToResolve(OsString),
 }
 //////////////////////// Impls ///////////////////////
 propagate!(MimicCommonError, IOError as io::Error, using_panic_feature);
+propagate!(MimicCommonError, ImageLoadError as ImageError, using_panic_feature);

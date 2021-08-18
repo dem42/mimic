@@ -32,7 +32,7 @@ use ash::{
     vk,
 };
 use log::info;
-use mimic_common::{apptime::AppTime, config::MimicConfig, uniforms::{StaticFnUniformSpec, UniformBufferObject, UniformSpec, UniformUpdateInput, update_uniform_buffer}};
+use mimic_common::{apptime::AppTime, config::MimicConfig, texture::{FilesystemTextureSource, TextureSource}, uniforms::{StaticFnUniformSpec, UniformBufferObject, UniformSpec, UniformUpdateInput, update_uniform_buffer}};
 use std::{
     convert::TryFrom,
     ffi::CString,
@@ -271,9 +271,12 @@ impl VulkanApp {
     }
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
+        let texture_path = self.resource_resolver
+        .resolve_resource("res/backend/textures/viking_room.png")?;
+        let texture_source = Box::new(FilesystemTextureSource::new(texture_path)?);
+
         self.create_render_command(
-            self.resource_resolver
-                .resolve_resource("res/backend/textures/viking_room.png")?,
+            texture_source,
             self.resource_resolver
                 .resolve_resource("res/backend/models/viking_room.obj")?,
             self.resource_resolver
@@ -286,7 +289,7 @@ impl VulkanApp {
 
     pub fn create_render_command(
         &mut self,
-        texture_file: PathBuf,
+        texture_source: Box<dyn TextureSource>,
         model_file: PathBuf,
         vertex_shader_file: PathBuf,
         fragment_shader_file: PathBuf,
@@ -303,7 +306,7 @@ impl VulkanApp {
         }
 
         let texture_image = TextureImage::new(
-            texture_file,
+            texture_source,
             &self.instance,
             self.physical_device,
             &self.logical_device,
