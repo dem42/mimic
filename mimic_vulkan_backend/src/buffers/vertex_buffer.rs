@@ -2,7 +2,7 @@ use crate::{
     buffers::buffer::Buffer, devices::queues::QueueMap, models::vertex::Vertex,
     util::result::Result,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use std::convert::TryFrom;
 //////////////////////// Structs ///////////////////////
 #[derive(Default)]
@@ -39,6 +39,10 @@ impl VertexBuffer {
         })
     }
 
+    /// # Safety
+    ///
+    /// This method calls unsafe, low-level vulkan api functions to destroy buffers and free memory.
+    /// It must be called with valid vulkan state.
     pub unsafe fn cleanup(self, logical_device: &ash::Device) {
         logical_device.destroy_buffer(self.data.buffer, None);
         logical_device.free_memory(self.data.memory, None);

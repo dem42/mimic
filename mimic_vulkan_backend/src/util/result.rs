@@ -1,4 +1,4 @@
-use ash::{vk, InstanceError};
+use ash::{vk};
 use mimic_common::{propagate, result::MimicCommonError};
 use std::{ffi::OsString, num::TryFromIntError, str::Utf8Error};
 use thiserror::Error;
@@ -32,7 +32,7 @@ pub enum VulkanError {
     #[error("No available layers")]
     NoValidationLayers,
     #[error("Failed to create physical device. No GPU with supported functions")]
-    PhysicalDeviceNoGPU,
+    PhysicalDeviceNoGpu,
     // queues
     #[error("Failed to create queue indices")]
     QueueCreationFailed,
@@ -65,8 +65,6 @@ pub enum VulkanError {
     UniformBufferNotAvailable(usize),
     // fallback errors
     #[error(transparent)]
-    AshInstanceError(InstanceError),
-    #[error(transparent)]
     ObjError(LoadError),
     #[error(transparent)]
     OtherVkResult(vk::Result),
@@ -80,11 +78,6 @@ pub enum VulkanError {
     WindowIncorrectPlatformSurface,
 }
 
-propagate!(
-    VulkanError,
-    AshInstanceError as InstanceError,
-    using_panic_feature
-);
 propagate!(VulkanError, ObjError as LoadError, using_panic_feature);
 propagate!(
     VulkanError,

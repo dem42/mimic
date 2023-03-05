@@ -24,7 +24,6 @@ impl Vertex {
             binding: 0,
             stride: u32::try_from(std::mem::size_of::<Self>())?,
             input_rate: vk::VertexInputRate::VERTEX,
-            ..Default::default()
         })
     }
 

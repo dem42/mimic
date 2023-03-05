@@ -11,8 +11,11 @@ use ash::extensions::mvk::MacOSSurface;
 use ash::extensions::ext::DebugUtils;
 use ash::extensions::khr::Surface;
 
-use ash::version::{EntryV1_0, InstanceV1_0};
-use ash::vk;
+use ash::{
+    Entry,
+    Instance,
+    vk,
+};
 
 // required extension ------------------------------------------------------
 #[cfg(target_os = "macos")]
@@ -128,9 +131,9 @@ pub fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
 }
 
 #[cfg(target_os = "windows")]
-pub fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
-    entry: &E,
-    instance: &I,
+pub fn create_surface(
+    entry: &Entry,
+    instance: &Instance,
     window_surface: &WindowSurface,
 ) -> Result<SurfaceContainer> {
     use std::os::raw::c_void;

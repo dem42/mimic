@@ -5,7 +5,7 @@ use crate::{
     textures::images::{Image, MipmapParam},
     util::result::Result,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::{vk};
 //////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct DepthResource {
@@ -59,6 +59,10 @@ impl DepthResource {
         })
     }
 
+    /// # Safety
+    ///
+    /// This method calls unsafe, low level vulkan api functions to destroy images and free memory.
+    /// So it must be called with valid vulkan state.
     pub unsafe fn drop(self, logical_device: &ash::Device) {
         logical_device.destroy_image_view(self.depth_image_view, None);
         logical_device.destroy_image(self.depth_image.image, None);

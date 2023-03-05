@@ -3,7 +3,6 @@ use crate::util::tools::vk_to_string;
 
 use log::info;
 
-use ash::version::EntryV1_0;
 use std::convert::TryFrom;
 use std::os::raw::c_char;
 use std::ptr;

@@ -44,7 +44,7 @@ impl DeviceRequirements {
     }
 
     pub fn convert_enabled_extension_names(
-        extensions_cstring: &Vec<CString>,
+        extensions_cstring: &[CString],
     ) -> Vec<*const c_char> {
         extensions_cstring.iter().map(|x| x.as_ptr()).collect()
     }

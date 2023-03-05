@@ -13,10 +13,10 @@ pub enum MimicCommonError {
     #[error(transparent)]
     ImageLoadError(ImageError),
     #[error(transparent)]
-    IOError(io::Error),
+    IoError(io::Error),
     #[error("Resource {0:?} failed to resolve")]
     ResourceFailedToResolve(OsString),
 }
 //////////////////////// Impls ///////////////////////
-propagate!(MimicCommonError, IOError as io::Error, using_panic_feature);
+propagate!(MimicCommonError, IoError as io::Error, using_panic_feature);
 propagate!(MimicCommonError, ImageLoadError as ImageError, using_panic_feature);

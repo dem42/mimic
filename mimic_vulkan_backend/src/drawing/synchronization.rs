@@ -1,6 +1,5 @@
 use crate::util::result::Result;
 
-use ash::version::DeviceV1_0;
 use ash::vk;
 
 use std::collections::HashMap;
@@ -54,6 +53,9 @@ impl SynchronizationContainer {
         self.current_frame_idx = (self.current_frame_idx + 1) % Self::MAX_FRAMES_IN_FLIGHT
     }
 
+    /// # Safety
+    ///
+    /// This function calls low level vulkan api to destroy semaphores and fences
     pub unsafe fn destroy(&self, logical_device: &ash::Device) {
         for i in 0..self.image_available_semaphores.len() {
             logical_device.destroy_semaphore(self.image_available_semaphores[i], None);

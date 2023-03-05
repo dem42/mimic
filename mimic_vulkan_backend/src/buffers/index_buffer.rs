@@ -2,7 +2,7 @@ use crate::{
     buffers::buffer::Buffer, devices::queues::QueueMap, models::index::IndexType,
     util::result::Result,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use std::convert::TryFrom;
 //////////////////////// Structs ///////////////////////
 #[derive(Default)]

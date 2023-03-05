@@ -39,6 +39,10 @@ impl VulkanDebug {
         }
     }
 
+    /// # Safety
+    ///
+    /// This method calls unsafe, low-level vulkan api functions to destroy a debug messenger.
+    /// Make sure to call it only with a valid debug messenger as field in self.
     pub unsafe fn destroy_debug_messenger(&mut self) {
         if let Some(debug_messenger) = self.debug_messenger {
             self.debug_utils
@@ -48,12 +52,11 @@ impl VulkanDebug {
 
     pub fn get_creation_destruction_debug_create_info(
         validation: &VulkanValidation,
-    ) -> *const c_void {
+    ) -> Option<vk::DebugUtilsMessengerCreateInfoEXT> {
         if validation.is_enabled {
-            let create_info = Self::populate_debug_create_info();
-            (&create_info as *const vk::DebugUtilsMessengerCreateInfoEXT) as *const c_void
+            Some(Self::populate_debug_create_info())
         } else {
-            ptr::null()
+            None
         }
     }
 

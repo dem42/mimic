@@ -1,6 +1,5 @@
 use crate::{depth::helpers, presentation::swap_chain::SwapChainContainer, util::result::Result};
 
-use ash::version::DeviceV1_0;
 use ash::vk;
 use std::convert::TryFrom;
 //////////////////////// Fns ///////////////////////
@@ -56,19 +55,16 @@ pub fn create_render_pass(
     let color_attachment_ref = vk::AttachmentReference {
         attachment: 0,
         layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        ..Default::default()
     };
 
     let depth_attachment_ref = vk::AttachmentReference {
         attachment: 1,
         layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        ..Default::default()
     };
 
     let color_attachment_resolve_ref = vk::AttachmentReference {
         attachment: 2,
         layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        ..Default::default()
     };
 
     // note that if p_color_attachemnts is an array

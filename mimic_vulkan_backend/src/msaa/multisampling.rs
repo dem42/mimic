@@ -3,7 +3,7 @@ use crate::{
     textures::images::{Image, MipmapParam},
     util::result::Result,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::{vk};
 //////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct ColorResource {
@@ -41,6 +41,10 @@ impl ColorResource {
         Ok(Self { image, view })
     }
 
+    /// # Safety
+    ///
+    /// This method calls unsafe, low-level vulkan api functions to destroy images and free memory.
+    /// It must be called with valid vulkan state.
     pub unsafe fn drop(self, logical_device: &ash::Device) {
         logical_device.destroy_image_view(self.view, None);
         logical_device.destroy_image(self.image.image, None);

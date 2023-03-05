@@ -4,7 +4,6 @@ use crate::{
     util::result::{Result, VulkanError},
 };
 use ash::{
-    version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
 use mimic_common::uniforms::{UniformSpec, UniformUpdateInput};

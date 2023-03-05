@@ -1,6 +1,5 @@
 use crate::util::result::{Result, VulkanError};
 
-use ash::version::InstanceV1_0;
 use ash::vk;
 
 pub fn has_stencil_component(format: vk::Format) -> bool {
@@ -12,7 +11,7 @@ pub fn find_depth_format(
     physical_device: vk::PhysicalDevice,
 ) -> Result<vk::Format> {
     find_supported_format(
-        &vec![
+        &[
             vk::Format::D32_SFLOAT,
             vk::Format::D32_SFLOAT_S8_UINT,
             vk::Format::D24_UNORM_S8_UINT,
@@ -36,10 +35,8 @@ fn find_supported_format(
             instance.get_physical_device_format_properties(physical_device, candidate_format)
         };
 
-        if tiling == vk::ImageTiling::LINEAR && props.linear_tiling_features.contains(features) {
-            return Ok(candidate_format);
-        } else if tiling == vk::ImageTiling::OPTIMAL
-            && props.optimal_tiling_features.contains(features)
+        if (tiling == vk::ImageTiling::LINEAR && props.linear_tiling_features.contains(features))
+            || (tiling == vk::ImageTiling::OPTIMAL && props.optimal_tiling_features.contains(features))
         {
             return Ok(candidate_format);
         }

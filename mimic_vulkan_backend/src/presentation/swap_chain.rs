@@ -1,7 +1,7 @@
 use crate::devices::queues::QueueFamilyIndices;
 use crate::util::platform::SurfaceContainer;
 use crate::util::result::{Result, VulkanError};
-use crate::window::window::WindowSize;
+use crate::window::WindowSize;
 
 use ash::extensions::khr;
 use ash::vk;
@@ -107,13 +107,13 @@ impl SwapChainSupportDetails {
     // swap extent is the resolution of the images we are writing to
     fn choose_swap_extent(&self, window_size: &WindowSize) -> vk::Extent2D {
         if self.capabilities.current_extent.width != u32::MAX {
-            return self.capabilities.current_extent;
+            self.capabilities.current_extent
         } else {
             let actual_extent = vk::Extent2D {
                 width: window_size.monitor_resolution_width,
                 height: window_size.monitor_resolution_height,
             };
-            let result_extent = vk::Extent2D {
+            vk::Extent2D {
                 width: cmp::max(
                     self.capabilities.min_image_extent.width,
                     cmp::min(
@@ -128,8 +128,7 @@ impl SwapChainSupportDetails {
                         actual_extent.height,
                     ),
                 ),
-            };
-            result_extent
+            }
         }
     }
 
@@ -140,7 +139,7 @@ impl SwapChainSupportDetails {
             }
         }
         // fifo always guaranteed to be available
-        return vk::PresentModeKHR::FIFO;
+        vk::PresentModeKHR::FIFO
     }
 
     fn choose_swap_surface_format(&self) -> Result<vk::SurfaceFormatKHR> {

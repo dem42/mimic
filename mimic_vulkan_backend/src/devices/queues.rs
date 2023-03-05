@@ -4,7 +4,6 @@ use crate::util::result::{Result, VulkanError};
 
 use log::{debug, info};
 
-use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use std::collections::{HashMap, HashSet};
 
@@ -33,14 +32,14 @@ impl QueueMap {
     pub fn get_graphics_queue(&self) -> Result<ash::vk::Queue> {
         self.queues
             .get(&QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS))
-            .map(|&x| x)
+            .copied()
             .ok_or(VulkanError::QueueGraphicsNotFound)
     }
 
     pub fn get_present_queue(&self) -> Result<ash::vk::Queue> {
         self.queues
             .get(&QueueType::PresentQueue)
-            .map(|&x| x)
+            .copied()
             .ok_or(VulkanError::QueuePresentNotFound)
     }
 }
@@ -66,10 +65,9 @@ impl QueueFamilyIndices {
             unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
 
         let mut queue_data_points = Vec::new();
-        let mut queue_family_index = 0u32;
-        for queue_family in device_queue_families {
+        for (queue_family_index, queue_family) in device_queue_families.into_iter().enumerate() {
             if queue_family.queue_count > 0 {
-                let mut queue_data = QueueData(queue_family_index, HashSet::new());
+                let mut queue_data = QueueData(queue_family_index as u32, HashSet::new());
                 for &required_family in requirements.required_queues.iter() {
                     match required_family {
                         QueueType::QueueWithFlag(queue_flag) => {
@@ -78,7 +76,7 @@ impl QueueFamilyIndices {
                             }
                         }
                         QueueType::PresentQueue => {
-                            if has_present_function(surface, physical_device, queue_family_index)? {
+                            if has_present_function(surface, physical_device, queue_family_index as u32)? {
                                 queue_data.1.insert(required_family);
                             }
                         }
@@ -88,7 +86,6 @@ impl QueueFamilyIndices {
                     queue_data_points.push(queue_data);
                 }
             }
-            queue_family_index += 1;
         }
 
         debug!("Found queue data points: {:?}", queue_data_points);

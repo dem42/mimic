@@ -1,5 +1,5 @@
 use std::time::{Duration, SystemTime, SystemTimeError};
-
+//////////////////////// Structs ///////////////////////
 pub struct AppTime {
     game_start_time: SystemTime,
     last_frame_start_time: SystemTime,
@@ -7,7 +7,7 @@ pub struct AppTime {
     pub delta_time: Duration,
     pub frame: u64,
 }
-
+//////////////////////// Impls ///////////////////////
 impl AppTime {
     pub fn new() -> Self {
         let now = SystemTime::now();
@@ -27,5 +27,11 @@ impl AppTime {
         self.frame += 1;
         self.last_frame_start_time = now;
         Ok(())
+    }
+}
+
+impl Default for AppTime {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -7,7 +7,6 @@ use crate::util::tools;
 
 use log::info;
 
-use ash::version::InstanceV1_0;
 use ash::vk;
 use ash::vk::{version_major, version_minor, version_patch};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
@@ -50,7 +49,7 @@ pub fn pick_physical_device(
 ) -> Result<vk::PhysicalDevice> {
     let physical_devices = unsafe { instance.enumerate_physical_devices()? };
     if physical_devices.is_empty() {
-        return Err(VulkanError::PhysicalDeviceNoGPU);
+        return Err(VulkanError::PhysicalDeviceNoGpu);
     }
 
     let mut suitable_physical_devices = BinaryHeap::new();
@@ -74,7 +73,7 @@ pub fn pick_physical_device(
         );
         Ok(best_suitable_phyiscal_device.physical_device)
     } else {
-        Err(VulkanError::PhysicalDeviceNoGPU)
+        Err(VulkanError::PhysicalDeviceNoGpu)
     }
 }
 
@@ -132,20 +131,19 @@ fn rate_physical_device(
     ));
 
     // if we don't match required device extensions then return 0 as rating
-    if check_device_extensions(instance, physical_device, requirements, &mut description)? == false
+    if !(check_device_extensions(instance, physical_device, requirements, &mut description)?)
     {
         return Ok((0, description));
     }
 
-    if !(requirements.supported_features_check)(&physical_device_features) {
+    if !((requirements.supported_features_check)(&physical_device_features)) {
         description.push_str("Physical device features don't support the necessary features");
         return Ok((0, description));
     }
 
     // if we have any special requirements as to what needs to be supported we should put it here
     let mut found_queue_families = HashSet::new();
-    let mut queue_family_idx = 0u32;
-    for queue_family in device_queue_families.iter() {
+    for (queue_family_idx, queue_family) in device_queue_families.iter().enumerate() {
         description.push_str(&format!("Queue Count: {:2} ", queue_family.queue_count));
         if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
             description.push_str("| Graphics Queue: supported ");
@@ -175,15 +173,14 @@ fn rate_physical_device(
             description.push_str("| Sparse binding Queue: unsupported ");
         };
 
-        if has_present_function(surface_container, physical_device, queue_family_idx)? {
+        if has_present_function(surface_container, physical_device, queue_family_idx as u32)? {
             description.push_str("| Present: supported ");
             found_queue_families.insert(QueueType::PresentQueue);
         } else {
             description.push_str("| Present: unsupported ");
         }
 
-        description.push_str("\n");
-        queue_family_idx += 1;
+        description.push('\n');
     }
 
     if !requirements
@@ -205,7 +202,7 @@ fn rate_physical_device(
 
     let swap_query_support_details =
         SwapChainSupportDetails::query_support(physical_device, &surface_container)?;
-    if (requirements.is_swap_chain_adequate_check)(&swap_query_support_details) == false {
+    if !((requirements.is_swap_chain_adequate_check)(&swap_query_support_details)) {
         description.push_str("Swap chain doesn't pass adequate check");
         return Ok((0, description));
     }

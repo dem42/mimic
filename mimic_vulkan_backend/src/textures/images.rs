@@ -10,7 +10,6 @@ use crate::{
 };
 
 use ash::{
-    version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
 use mimic_common::texture::TextureSource;
@@ -138,7 +137,6 @@ impl Image {
                 .height(self.height)
                 .depth(1)
                 .build(),
-            ..Default::default()
         };
 
         // specify an array of regions to copy
@@ -384,6 +382,10 @@ impl TextureImage {
         })
     }
 
+    /// # Safety
+    ///
+    /// This function calls unsafe, low-level vulkan api functions to destroy samplers, images and free memory.
+    /// It must be called with valid vulkan state in self.
     pub unsafe fn cleanup(self, logical_device: &ash::Device) {
         logical_device.destroy_sampler(self.sampler, None);
         logical_device.destroy_image_view(self.view, None);

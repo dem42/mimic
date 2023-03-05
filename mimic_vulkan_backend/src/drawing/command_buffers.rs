@@ -7,7 +7,7 @@ use crate::{
     uniforms::descriptors::DescriptorData,
     util::result::{Result, VulkanError},
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::{vk};
 use std::{convert::TryFrom, ptr};
 //////////////////////// Fns ///////////////////////
 pub fn create_command_pool(
@@ -87,7 +87,7 @@ pub fn end_single_time_commands(
 pub fn create_command_buffers(
     logical_device: &ash::Device,
     command_pool: &vk::CommandPool,
-    framebuffers: &Vec<vk::Framebuffer>,
+    framebuffers: &[vk::Framebuffer],
     graphics_pipeline: &GraphicsPipeline,
     swap_chain_container: &SwapChainContainer,
     vertex_buffer: &VertexBuffer,

@@ -28,7 +28,6 @@ use crate::{
 };
 use ash::{
     prelude::VkResult,
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
 use log::info;
@@ -44,7 +43,7 @@ const REQUIRED_QUEUES: [QueueType; 2] = [
     QueueType::QueueWithFlag(vk::QueueFlags::GRAPHICS),
     QueueType::PresentQueue,
 ];
-const DEVICE_EXTENSIONS: [&'static str; 1] = ["VK_KHR_swapchain"];
+const DEVICE_EXTENSIONS: [&str; 1] = ["VK_KHR_swapchain"];
 //////////////////////// Enums ///////////////////////
 /// This enum informs us during which part of the draw-frame process a window resize happened
 enum ResizeDetectedLocation {
@@ -120,7 +119,7 @@ impl VulkanApp {
         window_size: &WindowSize,
         resource_resolver: MimicConfig,
     ) -> Result<Self> {
-        let entry = ash::Entry::new().unwrap();
+        let entry = unsafe { ash::Entry::load().unwrap() };
         let validation = VulkanValidation::enabled(util::validation::ValidationOptions::Verbose);
         // creating the instance is equivalent to initializing the vulkan library
         let instance = Self::create_instance(window_title, engine_name, &entry, &validation)?;
@@ -683,7 +682,7 @@ impl VulkanApp {
         entry: &ash::Entry,
         validation: &VulkanValidation,
     ) -> Result<ash::Instance> {
-        if validation.check_validation_layer_support(entry)? == false {
+        if !(validation.check_validation_layer_support(entry)?) {
             return Err(VulkanError::RequiredValidationLayersUnsupported);
         }
 
@@ -696,14 +695,21 @@ impl VulkanApp {
             application_version: vk::make_version(1, 0, 0),
             p_engine_name: engine_name.as_ptr(),
             engine_version: vk::make_version(1, 0, 0),
-            api_version: vk::make_version(1, 0, 0),
+            api_version: vk::make_api_version(0, 1, 0, 0),
         };
 
         let extension_names = util::platform::required_extension_names();
 
+        let debug_create_info = VulkanDebug::get_creation_destruction_debug_create_info(validation);
+        let debug_create_info_ptr = if let Some(debug_create_info) = debug_create_info {
+            (&debug_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT) as *const std::os::raw::c_void
+        } else {
+            ptr::null()
+        };
+
         let create_info = vk::InstanceCreateInfo {
             s_type: vk::StructureType::INSTANCE_CREATE_INFO,
-            p_next: VulkanDebug::get_creation_destruction_debug_create_info(validation),
+            p_next: debug_create_info_ptr,
             flags: vk::InstanceCreateFlags::empty(),
             p_application_info: &app_info,
             enabled_layer_count: validation.get_enabled_layer_count(),

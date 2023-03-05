@@ -7,7 +7,7 @@ use crate::{
     presentation::swap_chain::SwapChainContainer,
     util::result::{Result, VulkanError},
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::{vk};
 use std::{convert::TryFrom, ffi::CString, path::Path, ptr};
 //////////////////////// Structs ///////////////////////
 pub struct GraphicsPipeline {
@@ -137,7 +137,7 @@ impl GraphicsPipeline {
         };
 
         let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState {
-            color_write_mask: vk::ColorComponentFlags::all(),
+            color_write_mask: vk::ColorComponentFlags::RGBA,
             blend_enable: vk::TRUE,
             src_color_blend_factor: vk::BlendFactor::SRC_ALPHA,
             dst_color_blend_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,

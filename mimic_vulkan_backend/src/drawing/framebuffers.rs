@@ -4,7 +4,7 @@ use crate::{
     presentation::{image_views::ImageViews, swap_chain::SwapChainContainer},
     util::result::Result,
 };
-use ash::{version::DeviceV1_0, vk};
+use ash::{vk};
 use std::convert::TryFrom;
 
 pub fn create_framebuffers(

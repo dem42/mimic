@@ -3,7 +3,6 @@ use crate::buffers::memory;
 use crate::devices::queues::QueueMap;
 use crate::util::result::Result;
 
-use ash::version::DeviceV1_0;
 use ash::vk;
 //////////////////////// Structs ///////////////////////
 #[derive(Default)]

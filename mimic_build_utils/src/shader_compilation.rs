@@ -56,6 +56,7 @@ impl ShaderSource {
         } else {
             "glslc"
         };
+        println!("About to run {:?} on {:?}", command_executable, args);
         let command_result = Command::new(command_executable).args(&args).output();
         println!(
             "Running {:?} -> got result: {:?}",

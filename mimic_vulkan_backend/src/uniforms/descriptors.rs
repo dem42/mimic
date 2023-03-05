@@ -3,7 +3,6 @@ use crate::presentation::swap_chain::SwapChainContainer;
 use crate::textures::images::TextureImage;
 use crate::util::result::{Result, VulkanError};
 
-use ash::version::DeviceV1_0;
 use ash::vk;
 use mimic_common::uniforms::UniformSpec;
 use std::convert::TryFrom;
@@ -21,7 +20,7 @@ impl DescriptorData {
         logical_device: &ash::Device,
         swap_chain_container: &SwapChainContainer,
         descriptor_layout: vk::DescriptorSetLayout,
-        uniform_buffers: &Vec<Buffer>,
+        uniform_buffers: &[Buffer],
         texture_image: &TextureImage,
     ) -> Result<Self> {
         let descriptor_pool = Self::create_descriptor_pool(logical_device, swap_chain_container)?;
@@ -50,13 +49,11 @@ impl DescriptorData {
         let ubo_descriptor_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: swap_chain_img_cnt,
-            ..Default::default()
         };
 
         let sampler_descriptor_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
             descriptor_count: swap_chain_img_cnt,
-            ..Default::default()
         };
 
         let descriptor_pool_sizes = [ubo_descriptor_pool_size, sampler_descriptor_pool_size];
@@ -79,7 +76,7 @@ impl DescriptorData {
         swap_chain_container: &SwapChainContainer,
         descriptor_pool: vk::DescriptorPool,
         descriptor_layout: vk::DescriptorSetLayout,
-        uniform_buffers: &Vec<Buffer>,
+        uniform_buffers: &[Buffer],
         texture_image: &TextureImage,
     ) -> Result<Vec<vk::DescriptorSet>> {
         let layouts = vec![descriptor_layout; swap_chain_container.swap_chain_images.len()];
@@ -105,14 +102,12 @@ impl DescriptorData {
                 offset: 0,
                 range: u64::try_from(uniform_spec.uniform_buffer_size())?,
                 buffer: uniform_buffers[buf_idx].buffer,
-                ..Default::default()
             };
 
             let descriptor_sampler_info = vk::DescriptorImageInfo {
                 image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 image_view: texture_image.view,
                 sampler: texture_image.sampler,
-                ..Default::default()
             };
 
             if buf_idx >= descriptor_sets.len() {

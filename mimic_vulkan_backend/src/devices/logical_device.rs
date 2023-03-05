@@ -3,7 +3,6 @@ use crate::devices::requirements::DeviceRequirements;
 use crate::util::result::{Result, VulkanError};
 use crate::util::validation::VulkanValidation;
 
-use ash::version::InstanceV1_0;
 use ash::vk;
 use std::convert::TryFrom;
 //////////////////////// Fns ///////////////////////
@@ -15,13 +14,13 @@ pub fn create_logical_device(
     validation: &VulkanValidation,
 ) -> Result<ash::Device> {
     let mut queue_create_infos = Vec::new();
-    for (&queue_family_index, _) in &queue_indices.indices {
+    for &queue_family_index in queue_indices.indices.keys() {
         let QueueFamilyCreateData(queue_family_index, queue_count, queue_priorities) =
             QueueFamilyIndices::get_best_queue_family_data(queue_family_index);
         let queue_create_info = vk::DeviceQueueCreateInfo {
             s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
-            queue_family_index: queue_family_index,
-            queue_count: queue_count,
+            queue_family_index,
+            queue_count,
             p_queue_priorities: queue_priorities.as_ptr(),
             ..vk::DeviceQueueCreateInfo::default()
         };
