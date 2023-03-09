@@ -13,14 +13,22 @@ pub fn create_logical_device(
     requirements: &DeviceRequirements,
     validation: &VulkanValidation,
 ) -> Result<ash::Device> {
-    let mut queue_create_infos = Vec::new();
+    let mut queue_family_create_data_vec = Vec::new();
     for &queue_family_index in queue_indices.indices.keys() {
+        queue_family_create_data_vec.push(QueueFamilyIndices::get_best_queue_family_data(
+            queue_family_index,
+        ));
+    }
+
+    let mut queue_create_infos = Vec::new();
+    for queue_family_create_data in queue_family_create_data_vec.iter() {
         let QueueFamilyCreateData(queue_family_index, queue_count, queue_priorities) =
-            QueueFamilyIndices::get_best_queue_family_data(queue_family_index);
+            queue_family_create_data;
+
         let queue_create_info = vk::DeviceQueueCreateInfo {
             s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
-            queue_family_index,
-            queue_count,
+            queue_family_index: *queue_family_index,
+            queue_count: *queue_count,
             p_queue_priorities: queue_priorities.as_ptr(),
             ..vk::DeviceQueueCreateInfo::default()
         };
