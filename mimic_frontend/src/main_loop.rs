@@ -12,12 +12,7 @@ use winit::{
 };
 //////////////////////// Traits ///////////////////////
 pub trait Application {
-    fn update(
-        &mut self,
-        render_commands: &mut RenderCommands,
-        apptime: &AppTime,
-        config: &MimicConfig,
-    );
+    fn update(&mut self, apptime: &AppTime, config: &MimicConfig) -> RenderCommands;
 }
 //////////////////////// Structs ///////////////////////
 /// This struct represent the 3D renderer main loop.
@@ -95,7 +90,6 @@ impl MainLoopBuilder {
         let mut vulkan_app = self.vulkan_app.take().unwrap();
 
         let mut apptime = AppTime::new();
-        let mut render_commands = RenderCommands::default();
         event_loop.run(move |event, _, control_flow| {
             // we set the control flow to poll on every invocation of the event_loop callback
             // this makes it so that after this event_loop iteration finishes another one begins immediately
@@ -104,15 +98,15 @@ impl MainLoopBuilder {
             match event {
                 Event::WindowEvent { event, .. } => {
                     Self::handle_window_event(control_flow, event, &mut vulkan_app);
-                },
+                }
                 Event::MainEventsCleared => {
                     Self::handle_events_cleared(
                         control_flow,
                         &mut apptime,
                         &mut application,
-                        &mut render_commands,
                         &mut vulkan_app,
-                        &winit_window);
+                        &winit_window,
+                    );
                 }
                 Event::RedrawRequested(_window_id) => {
                     if let Ok(window_size) = winit_window::get_window_size_from_winit(&winit_window)
@@ -141,7 +135,6 @@ impl MainLoopBuilder {
         control_flow: &mut ControlFlow,
         apptime: &mut AppTime,
         application: &mut A,
-        render_commands: &mut RenderCommands,
         vulkan_app: &mut VulkanApp,
         winit_window: &winit::window::Window,
     ) {
@@ -150,22 +143,22 @@ impl MainLoopBuilder {
             error!("Failed to update app time: {}", error);
             Self::exit(control_flow);
         } else {
-            application.update(render_commands, &apptime, &vulkan_app.resource_resolver);
+            let mut render_commands = application.update(&apptime, &vulkan_app.resource_resolver);
 
             for render_command in render_commands.command_queue.drain(..) {
                 match render_command {
                     RenderCommand::DrawObject {
-                        texture_source,
+                        texture_file,
                         model_file,
                         vertex_shader_file,
                         fragment_shader_file,
                         uniform_spec,
                     } => {
                         let result = vulkan_app.create_render_command(
-                            texture_source,
-                            model_file,
-                            vertex_shader_file,
-                            fragment_shader_file,
+                            &texture_file,
+                            &model_file,
+                            &vertex_shader_file,
+                            &fragment_shader_file,
                             uniform_spec,
                         );
                         if let Err(error) = result {
@@ -182,7 +175,11 @@ impl MainLoopBuilder {
         }
     }
 
-    fn handle_window_event(control_flow: &mut ControlFlow, event: WindowEvent, vulkan_app: &mut VulkanApp) {
+    fn handle_window_event(
+        control_flow: &mut ControlFlow,
+        event: WindowEvent,
+        vulkan_app: &mut VulkanApp,
+    ) {
         match event {
             WindowEvent::CloseRequested => {
                 Self::exit(control_flow);

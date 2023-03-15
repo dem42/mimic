@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use image::GenericImageView;
+use std::{path::PathBuf, rc::Rc};
 
 use crate::result::Result;
 //////////////////////// Traits ///////////////////////
@@ -12,7 +12,7 @@ pub trait TextureSource {
 //////////////////////// Structs ///////////////////////
 #[derive(Default)]
 pub struct FilesystemTextureSource {
-    pub path: PathBuf,
+    pub path: Rc<PathBuf>,
     width: u32,
     height: u32,
     image_size: u32,
@@ -20,7 +20,7 @@ pub struct FilesystemTextureSource {
 }
 //////////////////////// Impls ///////////////////////
 impl FilesystemTextureSource {
-    pub fn new(path: PathBuf) -> Result<Self> {
+    pub fn new(path: &Rc<PathBuf>) -> Result<Self> {
         let image = image::open(path.as_path())?;
 
         let (width, height) = image.dimensions();
@@ -30,7 +30,7 @@ impl FilesystemTextureSource {
         let pixels: &Vec<u8> = rgba_image.as_raw();
 
         Ok(FilesystemTextureSource {
-            path,
+            path: Rc::clone(path),
             width,
             height,
             image_size,

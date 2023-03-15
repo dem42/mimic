@@ -1,6 +1,7 @@
 use log::info;
 use nalgebra_glm as glm;
 //////////////////////// Structs ///////////////////////
+#[derive(Clone, Default)]
 pub struct Camera {
     pub position: glm::Vec3,
     pub forward: glm::Vec3,
@@ -9,7 +10,11 @@ pub struct Camera {
 //////////////////////// Impls ///////////////////////
 impl Camera {
     pub fn new(position: glm::Vec3, forward: glm::Vec3, up: glm::Vec3) -> Self {
-        Self { position, forward, up }
+        Self {
+            position,
+            forward,
+            up,
+        }
     }
 
     /// Compare the computed projection matrix to the values from a manual calculation
@@ -71,11 +76,7 @@ impl Camera {
     /// Remember that we don't actually move/rotate the camera at any time. Rather we apply the inverse transformation to all models in the world
     pub fn get_view_matrix(&self) -> glm::Mat4 {
         let look_at_point = &self.position + &self.forward;
-        let view = glm::look_at(
-            &self.position,
-            &look_at_point,
-            &self.up,
-        );
+        let view = glm::look_at(&self.position, &look_at_point, &self.up);
         view
     }
 }

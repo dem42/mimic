@@ -26,17 +26,23 @@ use crate::{
     },
     window::{WindowSize, WindowSurface},
 };
-use ash::{
-    prelude::VkResult,
-    vk,
-};
+use ash::{prelude::VkResult, vk};
 use log::info;
-use mimic_common::{apptime::AppTime, config::MimicConfig, texture::{FilesystemTextureSource, TextureSource}, uniforms::{StaticFnUniformSpec, UniformBufferObject, UniformSpec, UniformUpdateInput, update_uniform_buffer}};
+use mimic_common::{
+    apptime::AppTime,
+    config::MimicConfig,
+    texture::{FilesystemTextureSource, TextureSource},
+    uniforms::{
+        update_uniform_buffer, StaticFnUniformSpec, UniformBufferObject, UniformSpec,
+        UniformUpdateInput,
+    },
+};
 use std::{
     convert::TryFrom,
     ffi::CString,
     path::{Path, PathBuf},
     ptr,
+    rc::Rc,
 };
 //////////////////////// Consts ///////////////////////
 const REQUIRED_QUEUES: [QueueType; 2] = [
@@ -88,8 +94,8 @@ struct RenderCommandSwapChainFields {
 }
 
 struct RenderCommand {
-    vertex_shader_file: PathBuf,
-    fragment_shader_file: PathBuf,
+    vertex_shader_file: Rc<PathBuf>,
+    fragment_shader_file: Rc<PathBuf>,
     uniform_spec: Box<dyn UniformSpec>,
     _model: Mesh,
     vertex_buffer: VertexBuffer,
@@ -270,28 +276,39 @@ impl VulkanApp {
     }
 
     pub fn create_default_render_command(&mut self) -> Result<()> {
-        let texture_path = self.resource_resolver
-        .resolve_resource("res/backend/textures/viking_room.png")?;
-        let texture_source = Box::new(FilesystemTextureSource::new(texture_path)?);
-
-        self.create_render_command(
-            texture_source,
+        let texture_file = Rc::new(
+            self.resource_resolver
+                .resolve_resource("res/backend/textures/viking_room.png")?,
+        );
+        let model_file = Rc::new(
             self.resource_resolver
                 .resolve_resource("res/backend/models/viking_room.obj")?,
+        );
+        let vertex_shader_file = Rc::new(
             self.resource_resolver
                 .resolve_resource("res/backend/shaders/spv/simple_triangle.vert.spv")?,
+        );
+        let frag_shader_file = Rc::new(
             self.resource_resolver
                 .resolve_resource("res/backend/shaders/spv/simple_triangle.frag.spv")?,
-            Box::new(StaticFnUniformSpec::new::<UniformBufferObject>(update_uniform_buffer)),
+        );
+        self.create_render_command(
+            &texture_file,
+            &model_file,
+            &vertex_shader_file,
+            &frag_shader_file,
+            Box::new(StaticFnUniformSpec::new::<UniformBufferObject>(
+                update_uniform_buffer,
+            )),
         )
     }
 
     pub fn create_render_command(
         &mut self,
-        texture_source: Box<dyn TextureSource>,
-        model_file: PathBuf,
-        vertex_shader_file: PathBuf,
-        fragment_shader_file: PathBuf,
+        texture_file: &Rc<PathBuf>,
+        model_file: &Rc<PathBuf>,
+        vertex_shader_file: &Rc<PathBuf>,
+        fragment_shader_file: &Rc<PathBuf>,
         uniform_spec: Box<dyn UniformSpec>,
     ) -> Result<()> {
         // we are removing the previous render command so we must block until we are done using it and then clean it up
@@ -303,6 +320,8 @@ impl VulkanApp {
                 render_command.cleanup(&self.logical_device, self.command_pool);
             }
         }
+
+        let texture_source = Box::new(FilesystemTextureSource::new(texture_file)?);
 
         let texture_image = TextureImage::new(
             texture_source,
@@ -335,7 +354,7 @@ impl VulkanApp {
         )?;
 
         let uniform_descriptors =
-        uniforms::descriptors::create_descriptor_set_layout(&self.logical_device)?;
+            uniforms::descriptors::create_descriptor_set_layout(&self.logical_device)?;
 
         let dependent_fields = Self::create_render_command_swap_chain_fields(
             vertex_shader_file.as_path(),
@@ -354,8 +373,8 @@ impl VulkanApp {
         )?;
 
         self.current_render_command = Some(RenderCommand {
-            vertex_shader_file,
-            fragment_shader_file,
+            vertex_shader_file: Rc::clone(vertex_shader_file),
+            fragment_shader_file: Rc::clone(fragment_shader_file),
             uniform_spec,
             _model: model,
             vertex_buffer,
@@ -702,7 +721,8 @@ impl VulkanApp {
 
         let debug_create_info = VulkanDebug::get_creation_destruction_debug_create_info(validation);
         let debug_create_info_ptr = if let Some(debug_create_info) = debug_create_info {
-            (&debug_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT) as *const std::os::raw::c_void
+            (&debug_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT)
+                as *const std::os::raw::c_void
         } else {
             ptr::null()
         };

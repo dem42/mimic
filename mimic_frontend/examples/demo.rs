@@ -13,13 +13,10 @@ const WINDOW_HEIGHT: u32 = 600;
 struct Test;
 
 impl Application for Test {
-    fn update(
-        &mut self,
-        render_commands: &mut RenderCommands,
-        _apptime: &AppTime,
-        _resource_resolver: &MimicConfig,
-    ) {
+    fn update(&mut self, _apptime: &AppTime, _resource_resolver: &MimicConfig) -> RenderCommands {
+        let mut render_commands = RenderCommands::default();
         render_commands.request_redraw = true;
+        render_commands
     }
 }
 

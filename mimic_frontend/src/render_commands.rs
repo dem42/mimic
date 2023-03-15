@@ -1,12 +1,12 @@
-use mimic_common::{texture::TextureSource, uniforms::UniformSpec};
-use std::path::PathBuf;
+use mimic_common::uniforms::UniformSpec;
+use std::{path::PathBuf, rc::Rc};
 //////////////////////// Enums ///////////////////////
 pub enum RenderCommand {
     DrawObject {
-        texture_source: Box<dyn TextureSource>,
-        model_file: PathBuf,
-        vertex_shader_file: PathBuf,
-        fragment_shader_file: PathBuf,
+        texture_file: Rc<PathBuf>,
+        model_file: Rc<PathBuf>,
+        vertex_shader_file: Rc<PathBuf>,
+        fragment_shader_file: Rc<PathBuf>,
         uniform_spec: Box<dyn UniformSpec>,
     },
 }
@@ -20,17 +20,17 @@ pub struct RenderCommands {
 impl RenderCommands {
     pub fn draw_textured_model(
         &mut self,
-        texture_source: Box<dyn TextureSource>,
-        model_file: PathBuf,
-        vertex_shader_file: PathBuf,
-        fragment_shader_file: PathBuf,
+        texture_file: &Rc<PathBuf>,
+        model_file: &Rc<PathBuf>,
+        vertex_shader_file: &Rc<PathBuf>,
+        fragment_shader_file: &Rc<PathBuf>,
         uniform_spec: Box<dyn UniformSpec>,
     ) {
         self.command_queue.push(RenderCommand::DrawObject {
-            texture_source,
-            model_file,
-            vertex_shader_file,
-            fragment_shader_file,
+            texture_file: Rc::clone(texture_file),
+            model_file: Rc::clone(model_file),
+            vertex_shader_file: Rc::clone(vertex_shader_file),
+            fragment_shader_file: Rc::clone(fragment_shader_file),
             uniform_spec,
         });
     }
